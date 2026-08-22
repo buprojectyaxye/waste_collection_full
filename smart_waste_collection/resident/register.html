@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resident Register - Waste Collection Management System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="../css/style.css">
+    <style>
+        body {
+            background-color: #f4f6f9;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .register-card {
+            border: none;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+            background: #ffffff;
+        }
+        .section-header {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #2e7d32;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid #e8f5e9;
+        }
+        .input-group-text {
+            background-color: #f8f9fa;
+            border-right: none;
+            color: #2e7d32;
+        }
+        .form-control, .form-select {
+            border-left: none;
+            padding: 0.6rem 0.75rem;
+        }
+        .form-control:focus, .form-select:focus {
+            border-color: #dee2e6;
+            box-shadow: none;
+        }
+        .input-group:focus-within {
+            box-shadow: 0 0 0 0.25rem rgba(46, 125, 50, 0.15);
+            border-radius: 0.375rem;
+        }
+        .input-group:focus-within .input-group-text,
+        .input-group:focus-within .form-control,
+        .input-group:focus-within .form-select {
+            border-color: #2e7d32;
+        }
+        .btn-toggle-pass {
+            background-color: #f8f9fa;
+            border-left: none;
+            color: #6c757d;
+        }
+        .btn-toggle-pass:hover {
+            color: #2e7d32;
+        }
+        .btn-register {
+            background-color: #2e7d32;
+            border: none;
+            padding: 0.8rem;
+            font-weight: 700;
+            font-size: 1.05rem;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+        .btn-register:hover {
+            background-color: #1b5e20;
+            transform: translateY(-1px);
+        }
+        .password-strength-bar {
+            height: 6px;
+            border-radius: 3px;
+            transition: all 0.3s ease;
+            width: 0%;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <div class="container py-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-9 col-xl-8">
+                <div class="card register-card p-4 p-md-5">
+                    <div class="card-body p-0">
+                        <div class="text-center mb-4">
+                            <div class="d-inline-block p-3 rounded-circle bg-success-subtle text-success mb-2">
+                                <i class="fas fa-home fs-2"></i>
+                            </div>
+                            <h2 class="fw-bold text-success mb-1">Register as Resident</h2>
+                            <p class="text-muted small">Create your resident account for smart waste pickup & tracking</p>
+                        </div>
+
+                        <form id="residentRegisterForm">
+                            <!-- Section 1: Personal Info -->
+                            <div class="section-header">
+                                <i class="fas fa-user-circle me-2"></i>Personal Information
+                            </div>
+                            <div class="row g-3 mb-4">
+                                <div class="col-md-6">
+                                    <label class="form-label text-secondary small fw-semibold">Full Name</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text"><i class="fas fa-user"></i></span>
+                                        <input type="text" class="form-control" id="name" placeholder="e.g. Maryan Ali" required>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label text-secondary small fw-semibold">Phone Number</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text"><i class="fas fa-phone-alt"></i></span>
+                                        <input type="tel" class="form-control" id="phone" placeholder="e.g. +252 614840501" inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9+ ]/g, '')" required>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label text-secondary small fw-semibold">Email Address</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text"><i class="fas fa-envelope"></i></span>
+                                        <input type="email" class="form-control" id="email" placeholder="e.g. maryan@waste.com" required>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label text-secondary small fw-semibold">Select District / Zone</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text"><i class="fas fa-map-marker-alt"></i></span>
+                                        <select class="form-select" id="district" required>
+                                            <option value="" disabled selected>Select District...</option>
+                                            <option value="Wadajir">Wadajir District</option>
+                                            <option value="Hodan">Hodan District</option>
+                                            <option value="Waberi">Waberi District</option>
+                                            <option value="Deyniile">Deyniile District</option>
+                                            <option value="Karaan">Karaan District</option>
+                                            <option value="Hamarweyne">Hamarweyne District</option>
+                                            <option value="Howlwadaag">Howlwadaag District</option>
+                                            <option value="Kaxda">Kaxda District</option>
+                                            <option value="Shangani">Shangani District</option>
+                                            <option value="Shibis">Shibis District</option>
+                                            <option value="Bondhere">Bondhere District</option>
+                                            <option value="Abdiaziz">Abdiaziz District</option>
+                                            <option value="Dharkenley">Dharkenley District</option>
+                                            <option value="Garasbaley">Garasbaley District</option>
+                                            <option value="Yaqshid">Yaqshid District</option>
+                                            <option value="Huriwa">Huriwa District</option>
+                                            <option value="Warta Nabada">Warta Nabada District</option>
+                                            <option value="Hamar Jajab">Hamar Jajab District</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Section 2: Location & Address -->
+                            <div class="section-header">
+                                <i class="fas fa-compass me-2"></i>Location & Address Details
+                            </div>
+                            <div class="row g-3 mb-4">
+                                <div class="col-md-12">
+                                    <label class="form-label text-secondary small fw-semibold">House / Flat / Building No.</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text"><i class="fas fa-building"></i></span>
+                                        <input type="text" class="form-control" id="house_no" placeholder="e.g. House #45, Apt 2B" required oninput="checkHouseAvailability(this.value)" onblur="checkHouseAvailability(this.value)">
+                                    </div>
+                                    <div id="house_feedback" class="mt-1 small" style="display: none; font-size: 12px;"></div>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label text-secondary small fw-semibold">GPS Location / Map Link</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text"><i class="fas fa-map-pin"></i></span>
+                                        <input type="text" class="form-control" id="gps_location" placeholder="e.g. https://maps.google.com/?q=2.034247,45.311365">
+                                        <button class="btn btn-outline-success" type="button" onclick="detectGPSLocation()">
+                                            <i class="fas fa-crosshairs me-1"></i> Detect GPS Location
+                                        </button>
+                                    </div>
+                                    <small class="text-muted d-block mt-1" style="font-size: 12px;">Click 'Detect GPS Location' to auto-detect your home coordinates for accurate driver navigation.</small>
+                                </div>
+                            </div>
+
+                            <!-- Section 3: Password & Security -->
+                            <div class="section-header">
+                                <i class="fas fa-shield-alt me-2"></i>Account Security
+                            </div>
+                            <div class="row g-3 mb-4">
+                                <div class="col-md-6">
+                                    <label class="form-label text-secondary small fw-semibold">Password</label>
+                                    <div class="input-group mb-1">
+                                        <span class="input-group-text"><i class="fas fa-key"></i></span>
+                                        <input type="password" class="form-control" id="password" placeholder="Create password" required minlength="4" oninput="checkPasswordStrength(this.value)">
+                                        <button class="btn btn-outline-secondary btn-toggle-pass" type="button" onclick="togglePasswordVisibility('password', 'togglePassIcon1')">
+                                            <i class="fas fa-eye" id="togglePassIcon1"></i>
+                                        </button>
+                                    </div>
+                                    <div class="progress" style="height: 6px; background-color: #e9ecef;">
+                                        <div id="strengthBar" class="password-strength-bar bg-danger"></div>
+                                    </div>
+                                    <small id="strengthText" class="text-muted mt-1 d-block" style="font-size: 11px;">Password strength: Enter characters...</small>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label text-secondary small fw-semibold">Confirm Password</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text"><i class="fas fa-key"></i></span>
+                                        <input type="password" class="form-control" id="confirm_password" placeholder="Confirm password" required minlength="4">
+                                        <button class="btn btn-outline-secondary btn-toggle-pass" type="button" onclick="togglePasswordVisibility('confirm_password', 'togglePassIcon2')">
+                                            <i class="fas fa-eye" id="togglePassIcon2"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button type="submit" class="btn btn-success btn-register w-100 shadow-sm mt-2">
+                                <i class="fas fa-user-check me-2"></i>Create Resident Account
+                            </button>
+                        </form>
+
+                        <div class="text-center mt-4 pt-2 border-top">
+                            <p class="text-muted mb-0">Already have a resident account? <a href="login.html" class="text-success fw-bold text-decoration-none">Login here <i class="fas fa-arrow-right ms-1"></i></a></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="../js/api.js?v=99000000"></script>
+    <script>
+        let isHouseTaken = false;
+        let houseCheckTimeout = null;
+
+        async function checkHouseAvailability(val) {
+            val = (val || '').trim();
+            const feedback = document.getElementById('house_feedback');
+            const houseInput = document.getElementById('house_no');
+            if (!feedback || !houseInput) return;
+
+            if (!val) {
+                feedback.style.display = 'none';
+                houseInput.classList.remove('is-invalid', 'is-valid');
+                isHouseTaken = false;
+                return;
+            }
+
+            clearTimeout(houseCheckTimeout);
+            houseCheckTimeout = setTimeout(async () => {
+                try {
+                    const res = await apiCall(`/auth.php?action=check_house_no&house_no=${encodeURIComponent(val)}`);
+                    if (res && res.data && res.data.taken) {
+                        isHouseTaken = true;
+                        houseInput.classList.add('is-invalid');
+                        houseInput.classList.remove('is-valid');
+                        feedback.className = 'mt-1 small text-danger fw-bold';
+                        feedback.innerHTML = '<i class="fas fa-exclamation-circle me-1"></i> This house number has already been registered.';
+                        feedback.style.display = 'block';
+                    } else {
+                        isHouseTaken = false;
+                        houseInput.classList.remove('is-invalid');
+                        houseInput.classList.add('is-valid');
+                        feedback.className = 'mt-1 small text-success fw-bold';
+                        feedback.innerHTML = '<i class="fas fa-check-circle me-1"></i> House number is available!';
+                        feedback.style.display = 'block';
+                    }
+                } catch(err) {
+                    if (err.message && err.message.toLowerCase().includes('already been registered')) {
+                        isHouseTaken = true;
+                        houseInput.classList.add('is-invalid');
+                        houseInput.classList.remove('is-valid');
+                        feedback.className = 'mt-1 small text-danger fw-bold';
+                        feedback.innerHTML = '<i class="fas fa-exclamation-circle me-1"></i> This house number has already been registered.';
+                        feedback.style.display = 'block';
+                    }
+                }
+            }, 250);
+        }
+
+        function togglePasswordVisibility(inputId, iconId) {
+            const passInput = document.getElementById(inputId);
+            const icon = document.getElementById(iconId);
+            if (passInput.type === 'password') {
+                passInput.type = 'text';
+                icon.classList.remove('fa-eye');
+                icon.classList.add('fa-eye-slash');
+            } else {
+                passInput.type = 'password';
+                icon.classList.remove('fa-eye-slash');
+                icon.classList.add('fa-eye');
+            }
+        }
+
+        function checkPasswordStrength(val) {
+            const bar = document.getElementById('strengthBar');
+            const txt = document.getElementById('strengthText');
+            if (!val) {
+                bar.style.width = '0%';
+                txt.textContent = 'Password strength: Enter characters...';
+                return;
+            }
+            let score = 0;
+            if (val.length >= 4) score += 25;
+            if (val.length >= 8) score += 25;
+            if (/[A-Z]/.test(val)) score += 25;
+            if (/[0-9!@#$%^&*]/.test(val)) score += 25;
+
+            bar.style.width = score + '%';
+            if (score <= 25) {
+                bar.className = 'password-strength-bar bg-danger';
+                txt.innerHTML = '<span class="text-danger fw-bold">Weak 🔴</span>';
+            } else if (score <= 50) {
+                bar.className = 'password-strength-bar bg-warning';
+                txt.innerHTML = '<span class="text-warning fw-bold">Medium 🟡</span>';
+            } else {
+                bar.className = 'password-strength-bar bg-success';
+                txt.innerHTML = '<span class="text-success fw-bold">Strong 🟢</span>';
+            }
+        }
+
+        function detectGPSLocation() {
+            const gpsInput = document.getElementById('gps_location');
+            if (navigator.geolocation) {
+                gpsInput.value = 'Detecting location...';
+                navigator.geolocation.getCurrentPosition((pos) => {
+                    const lat = pos.coords.latitude.toFixed(6);
+                    const lng = pos.coords.longitude.toFixed(6);
+                    gpsInput.value = `https://maps.google.com/?q=${lat},${lng}`;
+                }, (err) => {
+                    // Fallback Mogadishu coordinates if geolocation blocked
+                    gpsInput.value = 'https://maps.google.com/?q=2.034247,45.311365';
+                });
+            } else {
+                gpsInput.value = 'https://maps.google.com/?q=2.034247,45.311365';
+            }
+        }
+
+        document.getElementById('residentRegisterForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirm_password').value;
+
+            if (password !== confirmPassword) {
+                alert('🛑 Passwords do not match! Please check and try again.');
+                return;
+            }
+
+            if (isHouseTaken) {
+                alert('🛑 This house number has already been registered. Please use your own unique house number.');
+                document.getElementById('house_no').focus();
+                return;
+            }
+
+            const district = document.getElementById('district').value;
+            const houseNo = document.getElementById('house_no').value.trim();
+            const gpsLoc = document.getElementById('gps_location').value;
+
+            const fullAddress = `${district}, Mogadishu (${houseNo}) ${gpsLoc}`.trim();
+
+            const data = {
+                name: document.getElementById('name').value,
+                email: document.getElementById('email').value,
+                phone: document.getElementById('phone').value,
+                house_no: houseNo,
+                address: fullAddress,
+                password: password
+            };
+            
+            try {
+                const res = await apiCall('/auth.php?action=register_resident', 'POST', data);
+                if(res.status === 'success') {
+                    alert(`🎉 Registration Successful! You can now login to schedule pickups.`);
+                    window.location.href = 'login.html';
+                }
+            } catch (err) {
+                alert('🛑 Registration Error: ' + err.message);
+            }
+        });
+    </script>
+</body>
+</html>

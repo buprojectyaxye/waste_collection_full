@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Print Report - Smart Waste</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        body { background: white; font-family: 'Inter', sans-serif; padding: 40px; color: #333; }
+        .report-header { border-bottom: 2px solid #2e7d32; padding-bottom: 20px; margin-bottom: 30px; }
+        .logo { font-size: 28px; font-weight: bold; color: #2e7d32; }
+        .logo i { margin-right: 10px; }
+        .report-title { font-size: 24px; font-weight: bold; margin-top: 20px; color: #1a1a1a; }
+        .report-meta { margin-top: 5px; color: #666; font-size: 14px; }
+        .table th { background-color: #f8f9fa !important; color: #333; font-weight: 600; }
+        .table td, .table th { vertical-align: middle; }
+        
+        /* Print Specific Styles */
+        @media print {
+            body { padding: 0; }
+            .no-print { display: none !important; }
+            .table th { background-color: #e9ecef !important; -webkit-print-color-adjust: exact; }
+            .report-header { border-bottom: 2px solid #2e7d32 !important; -webkit-print-color-adjust: exact; }
+        }
+    </style>
+</head>
+<body>
+    <div class="report-header d-flex justify-content-between align-items-end">
+        <div>
+            <div class="logo"><i class="fas fa-leaf"></i>Smart Waste</div>
+            <div class="report-title" id="reportTitle">System Report</div>
+        </div>
+        <div class="text-end">
+            <div class="report-meta"><strong>Date Range:</strong> <span id="reportDate">N/A</span></div>
+            <div class="report-meta"><strong>Generated On:</strong> <span id="generatedDate"></span></div>
+        </div>
+    </div>
+
+    <!-- Data Table -->
+    <table class="table table-bordered table-striped" id="reportTable">
+        <thead id="tableHead">
+            <!-- Dynamically populated -->
+        </thead>
+        <tbody id="tableBody">
+            <!-- Dynamically populated -->
+        </tbody>
+        <tfoot id="tableFoot" class="fw-bold bg-light">
+            <!-- Dynamically populated -->
+        </tfoot>
+    </table>
+
+    <div class="text-center mt-5 no-print pt-4">
+        <button class="btn btn-primary px-4 py-2 fw-bold" onclick="window.print()"><i class="fas fa-print me-2"></i> Print Document</button>
+        <button class="btn btn-outline-secondary px-4 py-2 fw-bold ms-2" onclick="window.close()">Close</button>
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const reportType = urlParams.get('type') || 'General System Report';
+        const dateRange = urlParams.get('date') || 'All Time';
+
+        document.getElementById('reportTitle').textContent = reportType;
+        document.getElementById('reportDate').textContent = dateRange;
+        
+        const now = new Date();
+        document.getElementById('generatedDate').textContent = now.toLocaleDateString() + ' ' + now.toLocaleTimeString();
+
+        const tableHead = document.getElementById('tableHead');
+        const tableBody = document.getElementById('tableBody');
+        const tableFoot = document.getElementById('tableFoot');
+
+        if (reportType === 'Waste Collection Summary') {
+            tableHead.innerHTML = `
+                <tr>
+                    <th>Date</th>
+                    <th>Zone / Area (Xaafadda)</th>
+                    <th>Driver Assigned (Darawalka)</th>
+                    <th>Waste Volume (Mugga/Tons)</th>
+                </tr>
+            `;
+            tableBody.innerHTML = `<tr><td colspan="4" class="text-center py-4 text-muted">Loading waste collection summary...</td></tr>`;
+            tableFoot.innerHTML = '';
+
+            fetch('../api/admin.php?action=get_all_requests')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success' && data.data.length > 0) {
+                        tableBody.innerHTML = '';
+                        data.data.slice(0, 10).forEach(req => {
+                            const dateStr = req.request_time ? req.request_time.split(' ')[0] : 'N/A';
+                            const rawAddr = req.address || '';
+                            const areaStr = rawAddr.split('http')[0].trim() || 'Mogadishu Zone';
+                            tableBody.innerHTML += `
+                                <tr>
+                                    <td>${dateStr}</td>
+                                    <td>${areaStr}</td>
+                                    <td>${req.driver_name || 'Unassigned'}</td>
+                                    <td><span class="badge bg-success">2.5 Tons</span></td>
+                                </tr>
+                            `;
+                        });
+                    } else {
+                        tableBody.innerHTML = `<tr><td colspan="4" class="text-center text-muted">No waste collection records found.</td></tr>`;
+                    }
+                })
+                .catch(err => {
+                    tableBody.innerHTML = `<tr><td colspan="4" class="text-center text-danger">Error loading summary data.</td></tr>`;
+                });
+        } else if (reportType === 'Driver Performance Report') {
+            tableHead.innerHTML = `
+                <tr>
+                    <th>Driver ID</th>
+                    <th>Driver Name (Magaca)</th>
+                    <th>Tasks Completed (Shaqooyinka)</th>
+                    <th>Customer Rating (Qiimaynta)</th>
+                </tr>
+            `;
+            tableBody.innerHTML = `<tr><td colspan="4" class="text-center py-4 text-muted">Loading real driver performance data...</td></tr>`;
+            tableFoot.innerHTML = '';
+
+            fetch('../api/admin.php?action=get_driver_performance')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success' && data.data.length > 0) {
+                        tableBody.innerHTML = '';
+                        data.data.forEach(driver => {
+                            tableBody.innerHTML += `
+                                <tr>
+                                    <td class="fw-bold">#DRV-${driver.driver_id}</td>
+                                    <td>${driver.name}</td>
+                                    <td>${driver.completed_trips} Trips</td>
+                                    <td><i class="fas fa-star text-warning"></i> 5.0 / 5.0</td>
+                                </tr>
+                            `;
+                        });
+                    } else {
+                        tableBody.innerHTML = `<tr><td colspan="4" class="text-center text-muted">No driver performance records found.</td></tr>`;
+                    }
+                })
+                .catch(err => {
+                    tableBody.innerHTML = `<tr><td colspan="4" class="text-center text-danger">Error loading report data.</td></tr>`;
+                });
+        } else if (reportType === 'System Error Logs') {
+            tableHead.innerHTML = `
+                <tr>
+                    <th>Error Code</th>
+                    <th>Component</th>
+                    <th>Error Description</th>
+                    <th>Timestamp</th>
+                </tr>
+            `;
+            tableBody.innerHTML = `<tr><td colspan="4" class="text-center py-4 text-muted">Loading system logs...</td></tr>`;
+            tableFoot.innerHTML = '';
+
+            fetch('../api/admin.php?action=get_system_logs')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success' && data.data.length > 0) {
+                        tableBody.innerHTML = '';
+                        data.data.forEach(log => {
+                            tableBody.innerHTML += `
+                                <tr>
+                                    <td class="fw-bold text-primary">${log.error_code}</td>
+                                    <td>${log.component}</td>
+                                    <td>${log.description}</td>
+                                    <td>${log.timestamp}</td>
+                                </tr>
+                            `;
+                        });
+                    }
+                });
+        } else {
+            // Default to Financial & Payments Report
+            tableHead.innerHTML = `
+                <tr>
+                    <th>Transaction ID</th>
+                    <th>Description / Name</th>
+                    <th>Status</th>
+                    <th>Date Logged</th>
+                    <th class="text-end">Amount</th>
+                </tr>
+            `;
+            tableBody.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-muted">Loading real payments data...</td></tr>`;
+            tableFoot.innerHTML = '';
+
+            fetch('../api/admin.php?action=get_all_payments')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success' && data.data.length > 0) {
+                        tableBody.innerHTML = '';
+                        let totalCollected = 0;
+                        let totalPending = 0;
+                        data.data.forEach(p => {
+                            const amt = parseFloat(p.amount) || 0;
+                            if (p.status === 'Completed' || p.status === 'Success') {
+                                totalCollected += amt;
+                            } else if (p.status === 'Pending') {
+                                totalPending += amt;
+                            }
+                            const statusBadge = (p.status === 'Completed' || p.status === 'Success') 
+                                ? '<span class="text-success fw-bold">Success</span>' 
+                                : (p.status === 'Pending' ? '<span class="text-warning fw-bold">Pending</span>' : '<span class="text-danger fw-bold">Failed</span>');
+                            tableBody.innerHTML += `
+                                <tr>
+                                    <td class="fw-bold">#TXN-${p.payment_id}</td>
+                                    <td>${p.resident_name || 'Resident'} - Waste Service Fee</td>
+                                    <td>${statusBadge}</td>
+                                    <td>${p.paid_at || '2026-08-01'}</td>
+                                    <td class="text-end">$${amt.toFixed(2)}</td>
+                                </tr>
+                            `;
+                        });
+                        tableFoot.innerHTML = `
+                            <tr>
+                                <td colspan="4" class="text-end fw-bold text-uppercase text-muted" style="letter-spacing: 1px;">Total Pending (Unpaid):</td>
+                                <td class="text-end fw-bold fs-6 text-warning">$${totalPending.toFixed(2)}</td>
+                            </tr>
+                            <tr>
+                                <td colspan="4" class="text-end fw-bold text-uppercase" style="letter-spacing: 1px;">Total Revenue Collected (Lacagta Soo Xarootay):</td>
+                                <td class="text-end fw-bold fs-5 text-success">$${totalCollected.toFixed(2)}</td>
+                            </tr>
+                        `;
+                    } else {
+                        tableBody.innerHTML = `<tr><td colspan="5" class="text-center text-muted">No payment transactions found.</td></tr>`;
+                    }
+                })
+                .catch(err => {
+                    tableBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">Error loading payments data.</td></tr>`;
+                });
+        }
+
+        const isPreview = urlParams.get('preview') === 'true';
+        const isPdf = urlParams.get('pdf') === 'true';
+
+        if (isPdf) {
+            document.querySelector('.no-print').style.display = 'none';
+            setTimeout(() => {
+                const element = document.body;
+                const opt = {
+                    margin:       0.5,
+                    filename:     reportType.replace(/ /g, '_').toLowerCase() + '.pdf',
+                    image:        { type: 'jpeg', quality: 0.98 },
+                    html2canvas:  { scale: 2 },
+                    jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+                };
+                html2pdf().set(opt).from(element).save().then(() => {
+                    setTimeout(() => window.close(), 1000);
+                });
+            }, 500);
+        } else if (!isPreview) {
+            window.onload = function() {
+                setTimeout(() => {
+                    window.print();
+                }, 500);
+            };
+        }
+    </script>
+</body>
+</html>

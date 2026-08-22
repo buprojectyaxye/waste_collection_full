@@ -1,0 +1,2231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Enterprise UI</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="../css/style.css?v=77000000">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body>
+
+    <!-- Header -->
+    <header class="top-header fixed-top d-flex align-items-center px-4 justify-content-between shadow-sm bg-white">
+        <div class="d-flex align-items-center">
+            <i class="fas fa-bars fs-5 me-3 cursor-pointer text-secondary" id="sidebarToggle"></i>
+            <i class="fas fa-leaf text-success fs-4 me-3"></i>
+            <span class="navbar-brand mb-0 fw-bold d-none d-md-block text-success">Smart Waste Admin</span>
+        </div>
+        
+        <div class="d-flex align-items-center gap-4">
+            
+            <!-- Live Global Search -->
+            <div class="position-relative d-none d-md-block" style="z-index: 2000;">
+                <div class="input-group">
+                    <span class="input-group-text bg-light border-0"><i class="fas fa-search text-muted"></i></span>
+                    <input type="text" id="headerGlobalSearch" class="form-control bg-light border-0 shadow-none ps-0" placeholder="Search residents, drivers, requests..." style="width: 320px;" oninput="handleGlobalSearch(this.value)" onfocus="handleGlobalSearch(this.value)" onkeydown="if(event.key==='Enter'){handleGlobalSearch(this.value);}" autocomplete="off">
+                </div>
+                <!-- Floating Live Search Dropdown -->
+                <div id="globalSearchResults" class="dropdown-menu shadow-lg border p-2 position-absolute start-0 mt-2 bg-white" style="display: none; max-height: 440px; overflow-y: auto; overflow-x: hidden; border-radius: 12px; min-width: 360px; right: 0; z-index: 9999;">
+                </div>
+            </div>
+
+            <!-- Messages Dropdown -->
+            <div class="dropdown">
+                <div class="position-relative cursor-pointer text-secondary fs-5" data-bs-toggle="dropdown">
+                    <i class="fas fa-envelope"></i>
+                    <span id="msgBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger border border-light" style="font-size: 10px; padding: 2px 6px; display: none;">0</span>
+                </div>
+                <div class="dropdown-menu dropdown-menu-end shadow-lg p-0 border-0" style="width: 320px; border-radius: 12px; overflow: hidden; margin-top: 15px;">
+                    <div class="bg-primary text-white p-3 d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0 fw-bold">Messages</h6>
+                        <span class="badge bg-white text-primary rounded-pill" id="headerMessagesCount">8 New</span>
+                    </div>
+                    <div class="list-group list-group-flush" style="max-height: 300px; overflow-y: auto;" id="headerMessagesList">
+                        <a class="dropdown-item py-3 border-bottom bg-white cursor-pointer" href="javascript:void(0)" onclick="openNafisoMessageDirectly(); return false;">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <strong class="text-dark fw-bold">Nafiso (Resident)</strong>
+                                <small class="text-primary fw-bold">Just now</small>
+                            </div>
+                            <div class="text-muted small text-truncate" style="max-width: 280px;">
+                                I have submitted a new waste collection request at Wadajir...
+                            </div>
+                        </a>
+                        <a class="dropdown-item py-3 border-bottom bg-white cursor-pointer" href="javascript:void(0)" onclick="openYahyeMessageDirectly(); return false;">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <strong class="text-dark fw-bold">Yahye Abdi (Resident)</strong>
+                                <small class="text-primary fw-bold">Today</small>
+                            </div>
+                            <div class="text-muted small text-truncate" style="max-width: 280px;">
+                                I have successfully paid my bill of $45 via Mobile Money...
+                            </div>
+                        </a>
+                    </div>
+                    <div class="p-2 text-center border-top bg-light">
+                        <a href="#messages" onclick="showSection('messages')" class="text-decoration-none small fw-bold text-primary">View All Messages</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dark Mode Quick Toggle -->
+            <div class="cursor-pointer text-secondary fs-5 d-flex align-items-center justify-content-center p-2 rounded-circle hover-bg" onclick="toggleDarkMode()" title="Toggle Dark Mode" style="width: 38px; height: 38px;">
+                <i class="fas fa-moon" id="headerThemeIcon"></i>
+            </div>
+            
+            <!-- Notifications Dropdown -->
+            <div class="dropdown">
+                <div class="position-relative cursor-pointer text-secondary fs-5" data-bs-toggle="dropdown">
+                    <i class="fas fa-bell"></i>
+                    <span id="notifBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger border border-light" style="font-size: 10px; padding: 2px 6px; display: inline-block;">10</span>
+                </div>
+                <div class="dropdown-menu dropdown-menu-end shadow-lg p-0 border-0" style="width: 320px; border-radius: 12px; overflow: hidden; margin-top: 15px;">
+                    <div class="bg-danger text-white p-3 d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0 fw-bold">Notifications</h6>
+                        <span class="badge bg-white text-danger rounded-pill" id="headerNotificationsCount">10 New</span>
+                    </div>
+                    <div class="list-group list-group-flush" style="max-height: 300px; overflow-y: auto;" id="headerNotificationsList">
+                        <a href="#" onclick="openHeaderNotificationByIndex(0); return false;" class="list-group-item list-group-item-action p-3 border-bottom bg-white cursor-pointer">
+                            <div class="d-flex align-items-center">
+                                <div class="flex-shrink-0 bg-primary-subtle text-primary rounded-circle p-2 me-3">
+                                    <i class="fas fa-bell"></i>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <h6 class="mb-0 fw-bold text-dark" style="font-size: 13px;">New Pickup Request</h6>
+                                    <p class="mb-0 text-muted" style="font-size: 12px;">A new request was submitted by Nafiso</p>
+                                </div>
+                            </div>
+                        </a>
+                        <a href="#" onclick="openHeaderNotificationByIndex(1); return false;" class="list-group-item list-group-item-action p-3 border-bottom bg-white cursor-pointer">
+                            <div class="d-flex align-items-center">
+                                <div class="flex-shrink-0 bg-success-subtle text-success rounded-circle p-2 me-3">
+                                    <i class="fas fa-dollar-sign"></i>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <h6 class="mb-0 fw-bold text-dark" style="font-size: 13px;">Payment Received</h6>
+                                    <p class="mb-0 text-muted" style="font-size: 12px;">Nafiso paid $5 via Mobile Money</p>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                    <div class="p-2 text-center border-top bg-light">
+                        <a href="#" class="text-decoration-none small fw-bold text-danger" onclick="apiCall('/admin.php?action=mark_all_notifications_read').then(()=>{showToast('All notifications marked as read','success');loadHeaderData();}); return false;">Mark all as read</a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Minimal Profile Dropdown -->
+            <div class="dropdown cursor-pointer">
+                <div class="d-flex align-items-center bg-white rounded-pill pe-3 shadow-sm border" data-bs-toggle="dropdown">
+                    <img src="https://ui-avatars.com/api/?name=Maryan+Ali&background=2e7d32&color=fff" class="rounded-circle" width="36" height="36" style="object-fit: cover; border: 1px solid #e0e0e0;" id="headerProfilePic" onerror="this.onerror=null; this.src='https://ui-avatars.com/api/?name=' + encodeURIComponent(document.getElementById('adminNameDisplay')?.textContent || 'Maryan Ali') + '&background=2e7d32&color=fff';">
+                    <span class="ms-2 fw-semibold text-dark fs-6 d-none d-md-inline" id="adminNameDisplay">Admin</span>
+                    <i class="fas fa-chevron-down ms-2 text-muted small"></i>
+                </div>
+                <ul class="dropdown-menu dropdown-menu-end border-0 shadow mt-2" style="border-radius: 12px;">
+                    <li><a class="dropdown-item py-2" href="#profile" onclick="showSection('profile')"><i class="fas fa-user-circle text-muted me-2"></i> My Profile</a></li>
+                    <li><a class="dropdown-item py-2" href="#settings" onclick="showSection('settings')"><i class="fas fa-cog text-muted me-2"></i> Settings</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item text-danger py-2" href="#" onclick="logout()"><i class="fas fa-sign-out-alt text-danger me-2"></i> Logout</a></li>
+                </ul>
+            </div>
+        </div>
+    </header>
+
+    <!-- Collapsible Sidebar (Icons only default, expands on click) -->
+    <nav class="sidebar">
+        <ul class="nav flex-column">
+            <li class="nav-item"><a class="nav-link active" href="#dashboard" title="Dashboard" onclick="document.querySelectorAll('.section-container').forEach(e=>{e.classList.add('d-none');e.style.display='none';});const t=document.getElementById('dashboard-section');if(t){t.classList.remove('d-none');t.style.display='block';}showSection('dashboard');return false;"><i class="fas fa-chart-pie"></i> <span>Dashboard</span></a></li>
+            <li class="nav-item"><a class="nav-link" href="#requests" title="View All Requests" onclick="document.querySelectorAll('.section-container').forEach(e=>{e.classList.add('d-none');e.style.display='none';});const t=document.getElementById('requests-section');if(t){t.classList.remove('d-none');t.style.display='block';}showSection('requests');return false;"><i class="fas fa-list"></i> <span>View All Requests</span></a></li>
+            <li class="nav-item"><a class="nav-link" href="#residents" title="Manage Residents" onclick="document.querySelectorAll('.section-container').forEach(e=>{e.classList.add('d-none');e.style.display='none';});const t=document.getElementById('residents-section');if(t){t.classList.remove('d-none');t.style.display='block';}showSection('residents');return false;"><i class="fas fa-users"></i> <span>Manage Residents</span></a></li>
+            <li class="nav-item"><a class="nav-link" href="#drivers" title="Manage Drivers" onclick="document.querySelectorAll('.section-container').forEach(e=>{e.classList.add('d-none');e.style.display='none';});const t=document.getElementById('drivers-section');if(t){t.classList.remove('d-none');t.style.display='block';}showSection('drivers');return false;"><i class="fas fa-truck"></i> <span>Manage Drivers</span></a></li>
+            <li class="nav-item"><a class="nav-link" href="#payments" title="Payments" onclick="document.querySelectorAll('.section-container').forEach(e=>{e.classList.add('d-none');e.style.display='none';});const t=document.getElementById('payments-section');if(t){t.classList.remove('d-none');t.style.display='block';}showSection('payments');return false;"><i class="fas fa-credit-card"></i> <span>Payments</span></a></li>
+            <li class="nav-item"><a class="nav-link" href="#reports" title="Advanced Reports & Analytics" onclick="document.querySelectorAll('.section-container').forEach(e=>{e.classList.add('d-none');e.style.display='none';});const t=document.getElementById('reports-section');if(t){t.classList.remove('d-none');t.style.display='block';}showSection('reports');return false;"><i class="fas fa-file-alt"></i> <span>Reports & Analytics</span></a></li>
+            <li class="nav-item"><a class="nav-link" href="#messages" title="Messages" onclick="document.querySelectorAll('.section-container').forEach(e=>{e.classList.add('d-none');e.style.display='none';});const t=document.getElementById('messages-section');if(t){t.classList.remove('d-none');t.style.display='block';}showSection('messages');return false;"><i class="fas fa-envelope"></i> <span>Messages</span></a></li>
+            <li class="nav-item"><a class="nav-link" href="#activities" title="Monitor System & Reports" onclick="document.querySelectorAll('.section-container').forEach(e=>{e.classList.add('d-none');e.style.display='none';});const t=document.getElementById('activities-section');if(t){t.classList.remove('d-none');t.style.display='block';}showSection('activities');return false;"><i class="fas fa-chart-line"></i> <span>Monitor System & Reports</span></a></li>
+            <li class="nav-item mt-4"><a class="nav-link" href="#settings" title="Settings" onclick="document.querySelectorAll('.section-container').forEach(e=>{e.classList.add('d-none');e.style.display='none';});const t=document.getElementById('settings-section');if(t){t.classList.remove('d-none');t.style.display='block';}showSection('settings');return false;"><i class="fas fa-cog"></i> <span>Settings</span></a></li>
+            <li class="nav-item"><a class="nav-link" href="#profile" title="Profile" onclick="document.querySelectorAll('.section-container').forEach(e=>{e.classList.add('d-none');e.style.display='none';});const t=document.getElementById('profile-section');if(t){t.classList.remove('d-none');t.style.display='block';}showSection('profile');return false;"><i class="fas fa-user"></i> <span>Profile</span></a></li>
+            <li class="nav-item mt-auto"><a class="nav-link text-danger" href="#" title="Logout" onclick="logout(); return false;"><i class="fas fa-sign-out-alt"></i> <span>Logout</span></a></li>
+        </ul>
+    </nav>
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        
+        <!-- DASHBOARD SECTION -->
+        <div id="dashboard-section" class="section-container">
+            <!-- Compact Stat Cards (8 requested) -->
+            <div class="row g-3 mb-4">
+                <div class="col-xl-3 col-md-6"><div class="card card-custom stat-card"><div class="d-flex align-items-center"><div class="icon-wrapper me-3"><i class="fas fa-box"></i></div><div><p>Total Waste Requests</p><h3 id="statTotalRequests">14</h3></div></div></div></div>
+                <div class="col-xl-3 col-md-6"><div class="card card-custom stat-card"><div class="d-flex align-items-center"><div class="icon-wrapper me-3" style="color:#b7791f; background:#fdf5e6;"><i class="fas fa-hourglass-half"></i></div><div><p>Pending Requests</p><h3 id="statPending">8</h3></div></div></div></div>
+                <div class="col-xl-3 col-md-6"><div class="card card-custom stat-card"><div class="d-flex align-items-center"><div class="icon-wrapper me-3" style="color:#2e7d32; background:#e8f5e9;"><i class="fas fa-check-circle"></i></div><div><p>Completed Requests</p><h3 id="statCompleted">5</h3></div></div></div></div>
+                <div class="col-xl-3 col-md-6"><div class="card card-custom stat-card"><div class="d-flex align-items-center"><div class="icon-wrapper me-3" style="color:#343a40; background:#f1f3f5;"><i class="fas fa-truck"></i></div><div><p>Active Drivers</p><h3 id="statDrivers">1</h3></div></div></div></div>
+                
+                <div class="col-xl-3 col-md-6"><div class="card card-custom stat-card"><div class="d-flex align-items-center"><div class="icon-wrapper me-3" style="color:#1565c0; background:#e3f2fd;"><i class="fas fa-users"></i></div><div><p>Total Residents</p><h3 id="statResidents">5</h3></div></div></div></div>
+                <div class="col-xl-3 col-md-6"><div class="card card-custom stat-card"><div class="d-flex align-items-center"><div class="icon-wrapper me-3" style="color:#c62828; background:#ffebee;"><i class="fas fa-credit-card"></i></div><div><p>Total Payments</p><h3 id="statPayments">12</h3></div></div></div></div>
+                <div class="col-xl-3 col-md-6"><div class="card card-custom stat-card"><div class="d-flex align-items-center"><div class="icon-wrapper me-3" style="color:#00695c; background:#e0f2f1;"><i class="fas fa-dollar-sign"></i></div><div><p>Monthly Revenue</p><h3 id="statRevenue">$170.00</h3></div></div></div></div>
+                <div class="col-xl-3 col-md-6"><div class="card card-custom stat-card"><div class="d-flex align-items-center"><div class="icon-wrapper me-3" style="color:#2e7d32; background:#e8f5e9;"><i class="fas fa-calendar-check"></i></div><div><p>Today's Collections</p><h3 id="statToday">0</h3></div></div></div></div>
+            </div>
+
+            <!-- Larger Charts Row -->
+            <div class="row g-4 mb-4">
+                <!-- Main Chart -->
+                <div class="col-lg-5">
+                    <div class="card card-custom p-3 h-100">
+                        <h6 class="fw-bold text-dark mb-3">Last 6 Months Requests</h6>
+                        <div style="position: relative; height: 250px; width: 100%;">
+                            <canvas id="barChart" style="height: 250px !important; width: 100% !important;"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-3">
+                    <div class="card card-custom p-3 h-100">
+                        <h6 class="fw-bold mb-3 text-dark">Request Status</h6>
+                        <div style="position: relative; height: 250px; width: 100%;">
+                            <canvas id="pieChart" style="height: 250px !important; width: 100% !important;"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-4">
+                    <div class="card card-custom p-3 h-100">
+                        <h6 class="fw-bold mb-3 text-dark">Driver Performance</h6>
+                        <div style="position: relative; height: 250px; width: 100%;">
+                            <canvas id="driverChart" style="height: 250px !important; width: 100% !important;"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-4 mb-4">
+                <!-- Clean Data Table with Search/Filters -->
+                <div class="col-xl-8">
+                    <div class="card card-custom p-3 h-100">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="fw-bold mb-0 text-dark">Recent Requests</h6>
+                            <div class="d-flex gap-2">
+                                <input type="text" id="dashboardSearch" class="form-control form-control-sm border-0 bg-light" placeholder="Search..." style="width: 150px;" oninput="filterDashboardRequests()" onkeyup="filterDashboardRequests()">
+                                <select id="dashboardStatusFilter" class="form-select form-select-sm border-0 bg-light" style="width: 120px;" onchange="filterDashboardRequests()">
+                                    <option value="All Status">All Status</option>
+                                    <option value="Accepted">Accepted</option>
+                                    <option value="Completed">Completed</option>
+                                    <option value="In Progress">In Progress</option>
+                                    <option value="Cancelled">Cancelled</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="table-wrapper" style="overflow-x: auto !important;">
+                            <table class="table table-custom table-hover align-middle mb-0 text-nowrap" style="min-width: 850px !important; white-space: nowrap !important;">
+                                <thead>
+                                    <tr style="white-space: nowrap !important;">
+                                        <th style="white-space: nowrap !important;">ID</th>
+                                        <th style="white-space: nowrap !important;">Resident</th>
+                                        <th class="address-column" style="min-width: 180px !important; white-space: nowrap !important;">Area</th>
+                                        <th style="white-space: nowrap !important;">Type</th>
+                                        <th style="white-space: nowrap !important;">Driver</th>
+                                        <th style="white-space: nowrap !important;">Req Date</th>
+                                        <th style="white-space: nowrap !important;">Status</th>
+                                        <th class="text-end" style="white-space: nowrap !important;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="recent-requests-dummy" style="white-space: nowrap !important;">
+                                    <tr style="white-space: nowrap !important;">
+                                        <td class="fw-bold" style="white-space: nowrap !important; vertical-align: middle;">#14</td>
+                                        <td style="white-space: nowrap !important; vertical-align: middle;">Yahye Abdi</td>
+                                        <td class="address-column" style="min-width: 180px !important; white-space: nowrap !important; vertical-align: middle;"><span class="fw-semibold me-1">Tarabunka, 12</span></td>
+                                        <td style="white-space: nowrap !important; vertical-align: middle;">General Waste</td>
+                                        <td style="white-space: nowrap !important; vertical-align: middle;">Unassigned</td>
+                                        <td style="white-space: nowrap !important; vertical-align: middle;">8/15/2026</td>
+                                        <td style="white-space: nowrap !important; vertical-align: middle;"><span class="badge badge-custom badge-pending">Pending</span></td>
+                                        <td class="text-end" style="white-space: nowrap !important; vertical-align: middle;">
+                                            <div class="btn-group btn-group-sm">
+                                                <button class="btn btn-outline-secondary" title="View"><i class="fas fa-eye"></i></button>
+                                                <button class="btn btn-outline-primary" title="Assign" onclick="openAssignModal(14)"><i class="fas fa-truck"></i></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <tr style="white-space: nowrap !important;">
+                                        <td class="fw-bold" style="white-space: nowrap !important; vertical-align: middle;">#13</td>
+                                        <td style="white-space: nowrap !important; vertical-align: middle;">Yahye Abdi</td>
+                                        <td class="address-column" style="min-width: 180px !important; white-space: nowrap !important; vertical-align: middle;"><span class="fw-semibold me-1">Tarabunka, 12</span></td>
+                                        <td style="white-space: nowrap !important; vertical-align: middle;">General Waste</td>
+                                        <td style="white-space: nowrap !important; vertical-align: middle;">Unassigned</td>
+                                        <td style="white-space: nowrap !important; vertical-align: middle;">8/14/2026</td>
+                                        <td style="white-space: nowrap !important; vertical-align: middle;"><span class="badge badge-custom badge-pending">Pending</span></td>
+                                        <td class="text-end" style="white-space: nowrap !important; vertical-align: middle;">
+                                            <div class="btn-group btn-group-sm">
+                                                <button class="btn btn-outline-secondary" title="View"><i class="fas fa-eye"></i></button>
+                                                <button class="btn btn-outline-primary" title="Assign" onclick="openAssignModal(13)"><i class="fas fa-truck"></i></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <tr style="white-space: nowrap !important;">
+                                        <td class="fw-bold" style="white-space: nowrap !important; vertical-align: middle;">#12</td>
+                                        <td style="white-space: nowrap !important; vertical-align: middle;">Nafiso</td>
+                                        <td class="address-column" style="min-width: 180px !important; white-space: nowrap !important; vertical-align: middle;"><span class="fw-semibold me-1">Wadajir, Mogadishu (13)</span></td>
+                                        <td style="white-space: nowrap !important; vertical-align: middle;">General</td>
+                                        <td style="white-space: nowrap !important; vertical-align: middle;">Unassigned</td>
+                                        <td style="white-space: nowrap !important; vertical-align: middle;">8/13/2026</td>
+                                        <td style="white-space: nowrap !important; vertical-align: middle;"><span class="badge badge-custom badge-pending">Pending</span></td>
+                                        <td class="text-end" style="white-space: nowrap !important; vertical-align: middle;">
+                                            <div class="btn-group btn-group-sm">
+                                                <button class="btn btn-outline-secondary" title="View"><i class="fas fa-eye"></i></button>
+                                                <button class="btn btn-outline-primary" title="Assign" onclick="openAssignModal(12)"><i class="fas fa-truck"></i></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <tr style="white-space: nowrap !important;">
+                                        <td class="fw-bold" style="white-space: nowrap !important; vertical-align: middle;">#11</td>
+                                        <td style="white-space: nowrap !important; vertical-align: middle;">Nafiso</td>
+                                        <td class="address-column" style="min-width: 180px !important; white-space: nowrap !important; vertical-align: middle;"><span class="fw-semibold me-1">Wadajir, Mogadishu (13)</span></td>
+                                        <td style="white-space: nowrap !important; vertical-align: middle;">Hazardous</td>
+                                        <td style="white-space: nowrap !important; vertical-align: middle;">Unassigned</td>
+                                        <td style="white-space: nowrap !important; vertical-align: middle;">8/14/2026</td>
+                                        <td style="white-space: nowrap !important; vertical-align: middle;"><span class="badge badge-custom badge-pending">Pending</span></td>
+                                        <td class="text-end" style="white-space: nowrap !important; vertical-align: middle;">
+                                            <div class="btn-group btn-group-sm">
+                                                <button class="btn btn-outline-secondary" title="View"><i class="fas fa-eye"></i></button>
+                                                <button class="btn btn-outline-primary" title="Assign" onclick="openAssignModal(11)"><i class="fas fa-truck"></i></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <tr style="white-space: nowrap !important;">
+                                        <td class="fw-bold" style="white-space: nowrap !important; vertical-align: middle;">#10</td>
+                                        <td style="white-space: nowrap !important; vertical-align: middle;">Nafiso</td>
+                                        <td class="address-column" style="min-width: 180px !important; white-space: nowrap !important; vertical-align: middle;"><span class="fw-semibold me-1">Wadajir, Mogadishu (13)</span></td>
+                                        <td style="white-space: nowrap !important; vertical-align: middle;">General</td>
+                                        <td style="white-space: nowrap !important; vertical-align: middle;">Unassigned</td>
+                                        <td style="white-space: nowrap !important; vertical-align: middle;">8/13/2026</td>
+                                        <td style="white-space: nowrap !important; vertical-align: middle;"><span class="badge badge-custom badge-pending">Pending</span></td>
+                                        <td class="text-end" style="white-space: nowrap !important; vertical-align: middle;">
+                                            <div class="btn-group btn-group-sm">
+                                                <button class="btn btn-outline-secondary" title="View"><i class="fas fa-eye"></i></button>
+                                                <button class="btn btn-outline-primary" title="Assign" onclick="openAssignModal(10)"><i class="fas fa-truck"></i></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <tr style="white-space: nowrap !important;">
+                                        <td class="fw-bold" style="white-space: nowrap !important; vertical-align: middle;">#9</td>
+                                        <td style="white-space: nowrap !important; vertical-align: middle;">Abdirahman</td>
+                                        <td class="address-column" style="min-width: 180px !important; white-space: nowrap !important; vertical-align: middle;"><span class="fw-semibold me-1">Tarabunka</span></td>
+                                        <td style="white-space: nowrap !important; vertical-align: middle;">Recycling</td>
+                                        <td style="white-space: nowrap !important; vertical-align: middle;">Unassigned</td>
+                                        <td style="white-space: nowrap !important; vertical-align: middle;">8/12/2026</td>
+                                        <td style="white-space: nowrap !important; vertical-align: middle;"><span class="badge badge-custom badge-pending">Pending</span></td>
+                                        <td class="text-end" style="white-space: nowrap !important; vertical-align: middle;">
+                                            <div class="btn-group btn-group-sm">
+                                                <button class="btn btn-outline-secondary" title="View"><i class="fas fa-eye"></i></button>
+                                                <button class="btn btn-outline-primary" title="Assign" onclick="openAssignModal(9)"><i class="fas fa-truck"></i></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <tr style="white-space: nowrap !important;">
+                                        <td class="fw-bold" style="white-space: nowrap !important; vertical-align: middle;">#8</td>
+                                        <td style="white-space: nowrap !important; vertical-align: middle;">Abdirahman</td>
+                                        <td class="address-column" style="min-width: 180px !important; white-space: nowrap !important; vertical-align: middle;"><span class="fw-semibold me-1">Tarabunka</span></td>
+                                        <td style="white-space: nowrap !important; vertical-align: middle;">Bulk</td>
+                                        <td style="white-space: nowrap !important; vertical-align: middle;">Unassigned</td>
+                                        <td style="white-space: nowrap !important; vertical-align: middle;">8/13/2026</td>
+                                        <td style="white-space: nowrap !important; vertical-align: middle;"><span class="badge badge-custom badge-pending">Pending</span></td>
+                                        <td class="text-end" style="white-space: nowrap !important; vertical-align: middle;">
+                                            <div class="btn-group btn-group-sm">
+                                                <button class="btn btn-outline-secondary" title="View"><i class="fas fa-eye"></i></button>
+                                                <button class="btn btn-outline-primary" title="Assign" onclick="openAssignModal(8)"><i class="fas fa-truck"></i></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mt-3 pt-2 border-top">
+                            <small class="text-muted">Showing 1 to 5 of 7 entries</small>
+                            <nav><ul class="pagination pagination-sm mb-0"><li class="page-item disabled"><a class="page-link" href="#">Prev</a></li><li class="page-item active"><a class="page-link" href="#">1</a></li><li class="page-item"><a class="page-link" href="#">2</a></li><li class="page-item"><a class="page-link" href="#">Next</a></li></ul></nav>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Live Driver Status (Compact) -->
+                <div class="col-xl-4">
+                    <div class="card card-custom p-3 h-100">
+                        <h6 class="fw-bold mb-3 text-dark">Driver Status Panel</h6>
+                        <div class="table-wrapper">
+                            <table class="table table-borderless table-sm align-middle">
+                                <thead class="text-muted" style="font-size: 11px; text-transform: uppercase;"><tr><th>Driver</th><th>Vehicle</th><th>Status</th></tr></thead>
+                                <tbody id="dashboard-driver-status-tbody">
+                                    <tr>
+                                        <td class="fw-bold text-capitalize">Malik</td>
+                                        <td class="small text-muted">Zone A</td>
+                                        <td><span class="badge bg-success-subtle text-success border border-success-subtle small">On Duty</span></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Third Row: Timeline & Schedule -->
+            <div class="row g-4 mb-4">
+                <div class="col-lg-6">
+                    <div class="card card-custom p-3 h-100">
+                        <h6 class="fw-bold mb-3 text-dark">Recent Activities Timeline</h6>
+                        <div class="timeline mt-2" id="dashboard-timeline">
+                            <div class="timeline-item">
+                                <div class="timeline-time">10:00 AM</div>
+                                <div class="small fw-semibold text-dark">Waste Collection Active</div>
+                                <div class="text-muted" style="font-size:12px;">System activity logs active and synchronized.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-6">
+                    <div class="card card-custom p-3 h-100">
+                        <h6 class="fw-bold mb-3 text-dark">Today's Collection Schedule</h6>
+                        <div class="table-wrapper">
+                            <table class="table table-sm align-middle table-custom">
+                                <thead><tr><th>Time</th><th>Area</th><th>Driver</th><th>Priority</th></tr></thead>
+                                <tbody id="dashboard-schedule">
+                                    <tr>
+                                        <td>11:30 AM</td>
+                                        <td>Hodan District</td>
+                                        <td class="text-capitalize">Malik</td>
+                                        <td><span class="badge badge-custom badge-completed">Normal</span></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- REQUESTS SECTION -->
+        <div id="requests-section" class="section-container d-none">
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h4 class="fw-bold text-dark mb-0">All Waste Requests</h4>
+                        <div class="d-flex gap-2">
+                            <input type="text" id="allRequestsSearch" oninput="filterAllRequests()" onkeyup="filterAllRequests()" class="form-control border-0 shadow-sm" placeholder="Search by resident or ID..." style="width: 250px;">
+                            <select id="allRequestsStatusFilter" onchange="filterAllRequests()" class="form-select border-0 shadow-sm" style="width: 160px;">
+                                <option value="">All Statuses</option>
+                                <option value="Accepted">Accepted</option>
+                                <option value="Assigned">Assigned</option>
+                                <option value="In Progress">In Progress</option>
+                                <option value="Completed">Completed</option>
+                                <option value="Cancelled">Cancelled</option>
+                            </select>
+                            <button class="btn btn-outline-success bg-white shadow-sm" onclick="exportAllRequestsCSV()"><i class="fas fa-file-export"></i> Export CSV</button>
+                        </div>
+                    </div>
+                    
+                    <div class="card card-custom">
+                        <div class="card-body p-0">
+                            <div class="table-wrapper" style="max-height: 600px;">
+                                <table class="table table-custom table-hover align-middle mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Request ID</th>
+                                            <th>Resident Name</th>
+                                            <th>Resident Address</th>
+                                            <th>Request Date & Time</th>
+                                            <th>Status</th>
+                                            <th>Assigned Driver</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="requests-tbody">
+                                        <tr>
+                                            <td class="fw-bold">#107</td>
+                                            <td class="fw-semibold text-dark">Yahye Abdi</td>
+                                            <td>Hodan District, Street 4</td>
+                                            <td>Aug 12, 2026, 2:30 PM</td>
+                                            <td><span class="badge bg-success">Completed</span></td>
+                                            <td><span class="fw-bold text-primary">Malik</span></td>
+                                            <td><span class="text-success small fw-bold"><i class="fas fa-check-double me-1"></i> Done</span> <button class="btn btn-sm btn-secondary disabled ms-1"><i class="fas fa-lock"></i> Locked</button></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="fw-bold">#106</td>
+                                            <td class="fw-semibold text-dark">Maryan Ali</td>
+                                            <td>Waberi Zone B, House 12</td>
+                                            <td>Aug 12, 2026, 11:15 AM</td>
+                                            <td><span class="badge bg-success">Completed</span></td>
+                                            <td><span class="fw-bold text-primary">Malik</span></td>
+                                            <td><span class="text-success small fw-bold"><i class="fas fa-check-double me-1"></i> Done</span> <button class="btn btn-sm btn-secondary disabled ms-1"><i class="fas fa-lock"></i> Locked</button></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="fw-bold">#105</td>
+                                            <td class="fw-semibold text-dark">Ahmed Noor</td>
+                                            <td>Karan District, Sector 3</td>
+                                            <td>Aug 11, 2026, 9:00 AM</td>
+                                            <td><span class="badge bg-warning text-dark">Pending</span></td>
+                                            <td><span class="fw-bold text-primary">-</span></td>
+                                            <td><button class="btn btn-sm btn-outline-danger" onclick="alert('🛑 Unpaid Request')"><i class="fas fa-lock me-1"></i> Unpaid</button> <button class="btn btn-sm btn-outline-secondary ms-1" onclick="openEditRequestModal(105)"><i class="fas fa-edit"></i> Edit</button></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="fw-bold">#104</td>
+                                            <td class="fw-semibold text-dark">Nafiso Omar</td>
+                                            <td>Daynile Area, Block C</td>
+                                            <td>Aug 10, 2026, 4:45 PM</td>
+                                            <td><span class="badge bg-success">Completed</span></td>
+                                            <td><span class="fw-bold text-primary">Malik</span></td>
+                                            <td><span class="text-success small fw-bold"><i class="fas fa-check-double me-1"></i> Done</span> <button class="btn btn-sm btn-secondary disabled ms-1"><i class="fas fa-lock"></i> Locked</button></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="fw-bold">#103</td>
+                                            <td class="fw-semibold text-dark">Hassan Farah</td>
+                                            <td>Howlwadaag, Street 7</td>
+                                            <td>Aug 09, 2026, 1:20 PM</td>
+                                            <td><span class="badge bg-success">Completed</span></td>
+                                            <td><span class="fw-bold text-primary">Malik</span></td>
+                                            <td><span class="text-success small fw-bold"><i class="fas fa-check-double me-1"></i> Done</span> <button class="btn btn-sm btn-secondary disabled ms-1"><i class="fas fa-lock"></i> Locked</button></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="card-footer bg-white border-0 d-flex justify-content-between py-3">
+                            <small class="text-muted">Showing page 1 of 1</small>
+                            <nav><ul class="pagination pagination-sm mb-0"><li class="page-item disabled"><a class="page-link" href="#">Previous</a></li><li class="page-item active"><a class="page-link" href="#">1</a></li><li class="page-item"><a class="page-link" href="#">Next</a></li></ul></nav>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ASSIGN DRIVER SECTION -->
+        <div id="assign-section" class="section-container d-none">
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+                        <h4 class="fw-bold text-dark mb-0"><i class="fas fa-route text-warning me-2"></i> Assign Drivers (Pending) <span class="badge bg-danger rounded-pill ms-2 fs-6 align-middle" id="headerAssignBadge" style="display:none;">0</span></h4>
+                        <input type="text" id="assignSearch" oninput="filterAssignRequests()" onkeyup="filterAssignRequests()" class="form-control form-control-sm border-0 shadow-sm" placeholder="Search by resident or address..." style="width: 250px;">
+                    </div>
+                    <div class="card card-custom">
+                        <div class="card-body p-0">
+                            <div class="table-wrapper" style="max-height: 600px;">
+                                <table class="table table-custom table-hover align-middle mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Request ID</th>
+                                            <th>Resident Name</th>
+                                            <th>Resident Address</th>
+                                            <th>Request Time</th>
+                                            <th>Priority</th>
+                                            <th>Assign Driver</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="assign-tbody">
+                                        <tr>
+                                            <td class="fw-bold">#14</td>
+                                            <td>
+                                                <span class="fw-bold text-dark">Yahye Abdi</span>
+                                                <div class="mt-1"><span class="badge bg-success"><i class="fas fa-check-circle me-1"></i> Paid ($45.00)</span></div>
+                                            </td>
+                                            <td>Tarabunka, 12</td>
+                                            <td>Aug 15, 2026, 2:00 PM</td>
+                                            <td><span class="badge bg-success">Normal</span></td>
+                                            <td>
+                                                <div class="d-flex align-items-center">
+                                                    <select class="form-select form-select-sm w-auto me-2" id="inline_assign_14">
+                                                        <option value="1">Malik (🟢 On Duty)</option>
+                                                    </select>
+                                                    <button class="btn btn-sm btn-success shadow-sm text-nowrap" onclick="assignDriverInline(14, true, this)"><i class="fas fa-user-check me-1"></i> Assign Driver</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="fw-bold">#13</td>
+                                            <td>
+                                                <span class="fw-bold text-dark">Yahye Abdi</span>
+                                                <div class="mt-1"><span class="badge bg-success"><i class="fas fa-check-circle me-1"></i> Paid ($45.00)</span></div>
+                                            </td>
+                                            <td>Tarabunka, 12</td>
+                                            <td>Aug 14, 2026, 9:00 PM</td>
+                                            <td><span class="badge bg-success">Normal</span></td>
+                                            <td>
+                                                <div class="d-flex align-items-center">
+                                                    <select class="form-select form-select-sm w-auto me-2" id="inline_assign_13">
+                                                        <option value="1">Malik (🟢 On Duty)</option>
+                                                    </select>
+                                                    <button class="btn btn-sm btn-success shadow-sm text-nowrap" onclick="assignDriverInline(13, true, this)"><i class="fas fa-user-check me-1"></i> Assign Driver</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="fw-bold">#12</td>
+                                            <td>
+                                                <span class="fw-bold text-dark">Nafiso</span>
+                                                <div class="mt-1"><span class="badge bg-success"><i class="fas fa-check-circle me-1"></i> Paid ($10.00)</span></div>
+                                            </td>
+                                            <td>Wadajir, Mogadishu (13)</td>
+                                            <td>Aug 13, 2026, 8:00 PM</td>
+                                            <td><span class="badge bg-success">Normal</span></td>
+                                            <td>
+                                                <div class="d-flex align-items-center">
+                                                    <select class="form-select form-select-sm w-auto me-2" id="inline_assign_12">
+                                                        <option value="1">Malik (🟢 On Duty)</option>
+                                                    </select>
+                                                    <button class="btn btn-sm btn-success shadow-sm text-nowrap" onclick="assignDriverInline(12, true, this)"><i class="fas fa-user-check me-1"></i> Assign Driver</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="fw-bold">#11</td>
+                                            <td>
+                                                <span class="fw-bold text-dark">Nafiso</span>
+                                                <div class="mt-1"><span class="badge bg-success"><i class="fas fa-check-circle me-1"></i> Paid ($10.00)</span></div>
+                                            </td>
+                                            <td>Wadajir, Mogadishu (13)</td>
+                                            <td>Aug 14, 2026, 8:00 PM</td>
+                                            <td><span class="badge bg-success">Normal</span></td>
+                                            <td>
+                                                <div class="d-flex align-items-center">
+                                                    <select class="form-select form-select-sm w-auto me-2" id="inline_assign_11">
+                                                        <option value="1">Malik (🟢 On Duty)</option>
+                                                    </select>
+                                                    <button class="btn btn-sm btn-success shadow-sm text-nowrap" onclick="assignDriverInline(11, true, this)"><i class="fas fa-user-check me-1"></i> Assign Driver</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="fw-bold">#10</td>
+                                            <td>
+                                                <span class="fw-bold text-dark">Nafiso</span>
+                                                <div class="mt-1"><span class="badge bg-success"><i class="fas fa-check-circle me-1"></i> Paid ($10.00)</span></div>
+                                            </td>
+                                            <td>Wadajir, Mogadishu (13)</td>
+                                            <td>Aug 13, 2026, 7:00 PM</td>
+                                            <td><span class="badge bg-success">Normal</span></td>
+                                            <td>
+                                                <div class="d-flex align-items-center">
+                                                    <select class="form-select form-select-sm w-auto me-2" id="inline_assign_10">
+                                                        <option value="1">Malik (🟢 On Duty)</option>
+                                                    </select>
+                                                    <button class="btn btn-sm btn-success shadow-sm text-nowrap" onclick="assignDriverInline(10, true, this)"><i class="fas fa-user-check me-1"></i> Assign Driver</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="fw-bold">#9</td>
+                                            <td>
+                                                <span class="fw-bold text-dark">Yahye Abdi</span>
+                                                <div class="mt-1"><span class="badge bg-success"><i class="fas fa-check-circle me-1"></i> Paid ($45.00)</span></div>
+                                            </td>
+                                            <td>Tarabunka, 12</td>
+                                            <td>Aug 12, 2026, 9:00 AM</td>
+                                            <td><span class="badge bg-success">Normal</span></td>
+                                            <td>
+                                                <div class="d-flex align-items-center">
+                                                    <select class="form-select form-select-sm w-auto me-2" id="inline_assign_9">
+                                                        <option value="1">Malik (🟢 On Duty)</option>
+                                                    </select>
+                                                    <button class="btn btn-sm btn-success shadow-sm text-nowrap" onclick="assignDriverInline(9, true, this)"><i class="fas fa-user-check me-1"></i> Assign Driver</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="fw-bold">#8</td>
+                                            <td>
+                                                <span class="fw-bold text-dark">Yahye Abdi</span>
+                                                <div class="mt-1"><span class="badge bg-success"><i class="fas fa-check-circle me-1"></i> Paid ($45.00)</span></div>
+                                            </td>
+                                            <td>Tarabunka, 12</td>
+                                            <td>Aug 13, 2026, 9:00 AM</td>
+                                            <td><span class="badge bg-success">Normal</span></td>
+                                            <td>
+                                                <div class="d-flex align-items-center">
+                                                    <select class="form-select form-select-sm w-auto me-2" id="inline_assign_8">
+                                                        <option value="1">Malik (🟢 On Duty)</option>
+                                                    </select>
+                                                    <button class="btn btn-sm btn-success shadow-sm text-nowrap" onclick="assignDriverInline(8, true, this)"><i class="fas fa-user-check me-1"></i> Assign Driver</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="fw-bold">#6</td>
+                                            <td>
+                                                <span class="fw-bold text-dark">Ahmed</span>
+                                                <div class="mt-1"><span class="badge bg-success"><i class="fas fa-check-circle me-1"></i> Paid ($15.00)</span></div>
+                                            </td>
+                                            <td>Wadajir, Mogadishu (17)</td>
+                                            <td>Aug 08, 2026, 10:00 AM</td>
+                                            <td><span class="badge bg-success">Normal</span></td>
+                                            <td>
+                                                <div class="d-flex align-items-center">
+                                                    <select class="form-select form-select-sm w-auto me-2" id="inline_assign_6">
+                                                        <option value="1">Malik (🟢 On Duty)</option>
+                                                    </select>
+                                                    <button class="btn btn-sm btn-success shadow-sm text-nowrap" onclick="assignDriverInline(6, true, this)"><i class="fas fa-user-check me-1"></i> Assign Driver</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- MANAGE RESIDENTS SECTION -->
+        <div id="residents-section" class="section-container d-none">
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="d-flex flex-column flex-md-row justify-content-between align-items-center mb-4 gap-3">
+                        <h4 class="fw-bold text-dark mb-0"><i class="fas fa-users text-success me-2"></i> Manage Residents</h4>
+                        <div class="d-flex gap-2">
+                            <input type="text" id="residentSearch" oninput="filterResidents()" onkeyup="filterResidents()" class="form-control border-0 shadow-sm" placeholder="Search by name, email, or phone..." style="width: 280px;">
+                            <select id="residentAddressFilter" onchange="filterResidents()" class="form-select border-0 shadow-sm" style="width: 180px;">
+                                <option value="">All Addresses</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <!-- Stats Cards for Residents -->
+                    <div class="row mb-4">
+                        <div class="col-md-4">
+                            <div class="card card-custom stat-card">
+                                <div class="d-flex align-items-center">
+                                    <div class="icon-wrapper bg-primary bg-opacity-10 text-primary"><i class="fas fa-users fs-4"></i></div>
+                                    <div class="ms-3">
+                                        <h6 class="text-muted mb-1">Total Residents</h6>
+                                        <h4 class="fw-bold mb-0" id="stat-total-residents">5</h4>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card card-custom stat-card">
+                                <div class="d-flex align-items-center">
+                                    <div class="icon-wrapper bg-success bg-opacity-10 text-success"><i class="fas fa-user-check fs-4"></i></div>
+                                    <div class="ms-3">
+                                        <h6 class="text-muted mb-1">Active Accounts</h6>
+                                        <h4 class="fw-bold mb-0" id="stat-active-residents">5</h4>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card card-custom stat-card">
+                                <div class="d-flex align-items-center">
+                                    <div class="icon-wrapper bg-danger bg-opacity-10 text-danger"><i class="fas fa-user-times fs-4"></i></div>
+                                    <div class="ms-3">
+                                        <h6 class="text-muted mb-1">Inactive Accounts</h6>
+                                        <h4 class="fw-bold mb-0" id="stat-inactive-residents">0</h4>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card card-custom">
+                        <div class="card-body p-0">
+                            <div class="table-wrapper" style="max-height: 600px;">
+                                <table class="table table-custom table-hover table-striped-custom align-middle mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Resident ID</th>
+                                            <th>Name</th>
+                                            <th>Email</th>
+                                            <th>Phone Number</th>
+                                            <th>Address</th>
+                                            <th>Status</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="residents-tbody">
+                                        <tr>
+                                            <td class="fw-bold">#1</td>
+                                            <td class="fw-semibold text-dark">Yahye Abdi</td>
+                                            <td>yahye@waste.com</td>
+                                            <td>+252 61 500 0001</td>
+                                            <td>Hodan District, Street 4</td>
+                                            <td><span class="badge bg-success">Active</span></td>
+                                            <td><button class="btn btn-sm btn-outline-primary" onclick="editResident(1)"><i class="fas fa-edit"></i> Edit</button></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="fw-bold">#2</td>
+                                            <td class="fw-semibold text-dark">Maryan Ali</td>
+                                            <td>maryan@waste.com</td>
+                                            <td>+252 61 500 0002</td>
+                                            <td>Waberi Zone B, House 12</td>
+                                            <td><span class="badge bg-success">Active</span></td>
+                                            <td><button class="btn btn-sm btn-outline-primary" onclick="editResident(2)"><i class="fas fa-edit"></i> Edit</button></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="fw-bold">#3</td>
+                                            <td class="fw-semibold text-dark">Ahmed Noor</td>
+                                            <td>ahmed@waste.com</td>
+                                            <td>+252 61 500 0003</td>
+                                            <td>Karan District, Sector 3</td>
+                                            <td><span class="badge bg-success">Active</span></td>
+                                            <td><button class="btn btn-sm btn-outline-primary" onclick="editResident(3)"><i class="fas fa-edit"></i> Edit</button></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="fw-bold">#4</td>
+                                            <td class="fw-semibold text-dark">Nafiso Omar</td>
+                                            <td>nafiso@waste.com</td>
+                                            <td>+252 61 500 0004</td>
+                                            <td>Daynile Area, Block C</td>
+                                            <td><span class="badge bg-success">Active</span></td>
+                                            <td><button class="btn btn-sm btn-outline-primary" onclick="editResident(4)"><i class="fas fa-edit"></i> Edit</button></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="fw-bold">#5</td>
+                                            <td class="fw-semibold text-dark">Hassan Farah</td>
+                                            <td>hassan@waste.com</td>
+                                            <td>+252 61 500 0005</td>
+                                            <td>Howlwadaag, Street 7</td>
+                                            <td><span class="badge bg-success">Active</span></td>
+                                            <td><button class="btn btn-sm btn-outline-primary" onclick="editResident(5)"><i class="fas fa-edit"></i> Edit</button></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <!-- Pagination Controls -->
+                            <div class="d-flex justify-content-between align-items-center p-3 border-top bg-light">
+                                <div class="text-muted small" id="residents-page-info">Showing 1 to 5 of 5 entries</div>
+                                <ul class="pagination pagination-sm mb-0" id="residents-pagination">
+                                    <!-- Pagination will be dynamically generated -->
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- MANAGE DRIVERS SECTION -->
+        <div id="drivers-section" class="section-container d-none">
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+                        <h4 class="fw-bold text-dark mb-0"><i class="fas fa-users text-primary me-2"></i> Manage Drivers</h4>
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="input-group input-group-sm" style="width: 250px;">
+                                <span class="input-group-text bg-white"><i class="fas fa-search text-muted"></i></span>
+                                <input type="text" id="driverSearch" class="form-control border-start-0" placeholder="Search name or phone..." oninput="filterDriversTable()">
+                            </div>
+                            <select id="driverZoneFilter" class="form-select form-select-sm" style="width: 150px;" onchange="filterDriversTable()">
+                                <option value="all">All Districts (Banaadir)</option>
+                                <option value="Abdiaziz">Abdiaziz</option>
+                                <option value="Bondhere">Bondhere</option>
+                                <option value="Daynile">Daynile</option>
+                                <option value="Dharkenley">Dharkenley</option>
+                                <option value="Garasbaley">Garasbaley</option>
+                                <option value="Hamar Jajab">Hamar Jajab</option>
+                                <option value="Hamar Weyne">Hamar Weyne</option>
+                                <option value="Hodan">Hodan</option>
+                                <option value="Howlwadag">Howlwadag</option>
+                                <option value="Huriwa">Huriwa</option>
+                                <option value="Kahda">Kahda</option>
+                                <option value="Karan">Karan</option>
+                                <option value="Shangani">Shangani</option>
+                                <option value="Shibis">Shibis</option>
+                                <option value="Waberi">Waberi</option>
+                                <option value="Wadajir">Wadajir</option>
+                                <option value="Warta Nabada">Warta Nabada</option>
+                                <option value="Yaqshid">Yaqshid</option>
+                            </select>
+                            <select id="driverStatusFilter" class="form-select form-select-sm" style="width: 170px;" onchange="filterDriversTable()">
+                                 <option value="all">All Approval / Status</option>
+                                 <option value="pending">🟡 Pending Approval</option>
+                                 <option value="approved">🟢 Approved (All)</option>
+                                 <option value="On Duty">🟢 On Duty</option>
+                                 <option value="On Break">🟡 On Break</option>
+                                 <option value="Off Duty">🔴 Off Duty</option>
+                                 <option value="rejected">🔴 Rejected</option>
+                             </select>
+                            <button class="btn btn-primary btn-sm shadow-sm" data-bs-toggle="modal" data-bs-target="#addDriverModal">
+                                <i class="fas fa-plus"></i> Add New Driver
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Stats Cards for Drivers -->
+                    <div class="row mb-4 g-3">
+                        <div class="col-md-3">
+                            <div class="card card-custom stat-card">
+                                <div class="d-flex align-items-center">
+                                    <div class="icon-wrapper bg-primary bg-opacity-10 text-primary"><i class="fas fa-truck fs-4"></i></div>
+                                    <div class="ms-3">
+                                        <h6 class="text-muted mb-1 small fw-bold">Total Drivers</h6>
+                                        <h4 class="fw-bold mb-0" id="stat-total-drivers">1</h4>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card card-custom stat-card">
+                                <div class="d-flex align-items-center">
+                                    <div class="icon-wrapper bg-warning bg-opacity-10 text-warning"><i class="fas fa-hourglass-half fs-4"></i></div>
+                                    <div class="ms-3">
+                                        <h6 class="text-muted mb-1 small fw-bold">Pending Approval</h6>
+                                        <h4 class="fw-bold mb-0 text-warning" id="stat-pending-drivers">0</h4>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card card-custom stat-card">
+                                <div class="d-flex align-items-center">
+                                    <div class="icon-wrapper bg-success bg-opacity-10 text-success"><i class="fas fa-circle-check fs-4"></i></div>
+                                    <div class="ms-3">
+                                        <h6 class="text-muted mb-1 small fw-bold">Approved (Active)</h6>
+                                        <h4 class="fw-bold mb-0 text-success" id="stat-active-drivers">1</h4>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card card-custom stat-card">
+                                <div class="d-flex align-items-center">
+                                    <div class="icon-wrapper bg-secondary bg-opacity-10 text-secondary"><i class="fas fa-truck-slash fs-4"></i></div>
+                                    <div class="ms-3">
+                                        <h6 class="text-muted mb-1 small fw-bold">Offline / Rejected</h6>
+                                        <h4 class="fw-bold mb-0" id="stat-offline-drivers">0</h4>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card card-custom">
+                        <div class="card-body p-0">
+                            <div class="table-wrapper" style="max-height: 600px;">
+                                <table class="table table-custom table-hover align-middle mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Driver ID</th>
+                                            <th>Driver Name & License</th>
+                                            <th>Phone Number</th>
+                                            <th>Assigned Vehicle Plate</th>
+                                            <th>Zone / Area</th>
+                                            <th>Approval & Status</th>
+                                            <th class="text-end">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="drivers-tbody">
+                                        <tr>
+                                            <td class="fw-bold">#1</td>
+                                            <td>
+                                                <div class="fw-bold text-dark">Malik</div>
+                                                <small class="text-muted"><i class="fas fa-id-badge me-1"></i>DL-8822</small>
+                                            </td>
+                                            <td>+252 61 500 1122</td>
+                                            <td><span class="badge bg-light text-dark border">TR-401</span></td>
+                                            <td>Hodan (Zone A)</td>
+                                            <td><span class="badge bg-success">🟢 On Duty</span></td>
+                                            <td class="text-end">
+                                                <button class="btn btn-sm btn-outline-primary" onclick="editDriver(1)"><i class="fas fa-edit"></i> Edit</button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PAYMENTS SECTION -->
+        <div id="payments-section" class="section-container d-none">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h4 class="fw-bold text-dark mb-0"><i class="fas fa-credit-card text-success me-2"></i> Payments & Revenue</h4>
+                <div class="d-flex gap-2 align-items-center">
+                    <select id="revenueDateFilter" class="form-select form-select-sm shadow-sm" onchange="loadPayments()">
+                        <option value="6months">Last 6 Months</option>
+                        <option value="this_month">This Month</option>
+                        <option value="7days">Last 7 Days</option>
+                    </select>
+                    <button class="btn btn-success btn-sm shadow-sm text-white text-nowrap px-3" onclick="generateFinancialReport()"><i class="fas fa-file-invoice-dollar"></i> Generate Financial Report</button>
+                </div>
+            </div>
+
+            <!-- Payment Stat Cards -->
+            <div class="row g-3 mb-4">
+                <div class="col-xl-3 col-md-6"><div class="card card-custom stat-card"><div class="d-flex align-items-center"><div class="icon-wrapper me-3" style="color:#0275d8; background:#e0f2f1;"><i class="fas fa-receipt"></i></div><div><p>Total Transactions</p><h3 id="payTotalCount">7</h3></div></div></div></div>
+                <div class="col-xl-3 col-md-6"><div class="card card-custom stat-card"><div class="d-flex align-items-center"><div class="icon-wrapper me-3" style="color:#2e7d32; background:#e8f5e9;"><i class="fas fa-dollar-sign"></i></div><div><p>Monthly Revenue</p><h3 id="payMonthlyRev">$120.00</h3></div></div></div></div>
+                <div class="col-xl-3 col-md-6"><div class="card card-custom stat-card"><div class="d-flex align-items-center"><div class="icon-wrapper me-3" style="color:#b7791f; background:#fdf5e6;"><i class="fas fa-clock"></i></div><div><p>Pending Payments</p><h3 id="payPending">1</h3></div></div></div></div>
+                <div class="col-xl-3 col-md-6"><div class="card card-custom stat-card"><div class="d-flex align-items-center"><div class="icon-wrapper me-3" style="color:#c62828; background:#ffebee;"><i class="fas fa-times-circle"></i></div><div><p>Failed Payments</p><h3 id="payFailed">0</h3></div></div></div></div>
+            </div>
+
+            <!-- Payment Charts Row -->
+            <div class="row g-4 mb-4">
+                <div class="col-lg-8">
+                    <div class="card card-custom p-3 h-100">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="fw-bold mb-0 text-dark" id="revenueChartTitle">Revenue Over Time (6 Months)</h6>
+                        </div>
+                        <div style="position: relative; height: 280px; width: 100%;">
+                            <canvas id="revenueAreaChart" style="height: 280px !important; width: 100% !important;"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-4">
+                    <div class="card card-custom p-3 h-100">
+                        <h6 class="fw-bold mb-3 text-dark">Payment Status Breakdown</h6>
+                        <div style="position: relative; height: 280px; width: 100%;">
+                            <canvas id="paymentStatusChart" style="height: 280px !important; width: 100% !important;"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Payments Table (Static for visual) -->
+            <div class="row">
+                <div class="col-12">
+                    <div class="card card-custom p-3">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="fw-bold mb-0 text-dark">Recent Transactions</h6>
+                            <input type="text" id="transactionsSearch" class="form-control form-control-sm border-0 bg-light shadow-sm" placeholder="Search transactions..." style="width: 220px;" oninput="filterTransactionsTable()" onkeyup="filterTransactionsTable()">
+                        </div>
+                        <div class="table-wrapper">
+                            <table class="table table-custom table-hover align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Transaction ID</th>
+                                        <th>Resident</th>
+                                        <th>Date</th>
+                                        <th>Amount</th>
+                                        <th>Method</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="recent-transactions-tbody">
+                                    <tr>
+                                        <td class="fw-bold">TXN-8807</td>
+                                        <td class="fw-semibold">Yahye Abdi</td>
+                                        <td>Aug 12, 2026</td>
+                                        <td class="text-success fw-bold">$15.00</td>
+                                        <td>EVC Plus</td>
+                                        <td><span class="badge bg-success">Completed</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-bold">TXN-8806</td>
+                                        <td class="fw-semibold">Maryan Ali</td>
+                                        <td>Aug 12, 2026</td>
+                                        <td class="text-success fw-bold">$45.00</td>
+                                        <td>EVC Plus</td>
+                                        <td><span class="badge bg-success">Completed</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-bold">TXN-8805</td>
+                                        <td class="fw-semibold">Ahmed Noor</td>
+                                        <td>Aug 11, 2026</td>
+                                        <td class="text-warning fw-bold">$15.00</td>
+                                        <td>EVC Plus</td>
+                                        <td><span class="badge bg-warning text-dark">Pending</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-bold">TXN-8804</td>
+                                        <td class="fw-semibold">Nafiso Omar</td>
+                                        <td>Aug 10, 2026</td>
+                                        <td class="text-success fw-bold">$15.00</td>
+                                        <td>EVC Plus</td>
+                                        <td><span class="badge bg-success">Completed</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-bold">TXN-8803</td>
+                                        <td class="fw-semibold">Hassan Farah</td>
+                                        <td>Aug 09, 2026</td>
+                                        <td class="text-success fw-bold">$15.00</td>
+                                        <td>EVC Plus</td>
+                                        <td><span class="badge bg-success">Completed</span></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ADVANCED REPORTS & ANALYTICS SECTION -->
+        <div id="reports-section" class="section-container d-none">
+            <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+                <h4 class="fw-bold text-dark mb-0"><i class="fas fa-file-alt text-success me-2"></i> Advanced Reports & Analytics</h4>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-danger btn-sm shadow-sm font-semibold" onclick="exportReportsPDF()"><i class="fas fa-file-pdf me-1"></i> Export PDF</button>
+                    <button class="btn btn-outline-success btn-sm shadow-sm font-semibold" onclick="exportReportsExcel()"><i class="fas fa-file-excel me-1"></i> Export Excel/CSV</button>
+                </div>
+            </div>
+
+            <!-- Controls & Single User Filter Card -->
+            <div class="card card-custom p-3 mb-4 shadow-sm border-0">
+                <div class="row g-3 align-items-center">
+                    <div class="col-md-3">
+                        <label class="form-label text-muted small fw-bold mb-1">Filter by Role</label>
+                        <select id="rptRoleFilter" class="form-select form-select-sm" onchange="filterReportRoleChange()">
+                            <option value="all">All Roles (Global)</option>
+                            <option value="resident">Residents Only</option>
+                            <option value="driver">Drivers Only</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label text-muted small fw-bold mb-1">Single User Lookup</label>
+                        <select id="rptUserSelect" class="form-select form-select-sm" onchange="generateAdvancedReport()">
+                            <option value="all">-- All Users (Global Report) --</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label text-muted small fw-bold mb-1">Date Range</label>
+                        <select id="rptDateRange" class="form-select form-select-sm" onchange="toggleReportCustomDate()">
+                            <option value="all">All Time</option>
+                            <option value="today">Today</option>
+                            <option value="week">This Week</option>
+                            <option value="month">This Month</option>
+                            <option value="custom">Custom Date Range</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label text-muted small fw-bold mb-1">Status Filter</label>
+                        <select id="rptStatusFilter" class="form-select form-select-sm" onchange="generateAdvancedReport()">
+                            <option value="all">All Statuses</option>
+                            <option value="Accepted">Accepted</option>
+                            <option value="Completed">Completed</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="Paid">Paid Only</option>
+                        </select>
+                    </div>
+
+                    <!-- Custom Date Inputs (shown if Date Range = custom) -->
+                    <div class="col-md-6 d-none" id="rptCustomDateContainer">
+                        <div class="d-flex gap-2">
+                            <input type="date" id="rptFromDate" class="form-control form-control-sm" onchange="generateAdvancedReport()">
+                            <input type="date" id="rptToDate" class="form-control form-control-sm" onchange="generateAdvancedReport()">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- KPI Metric Summary Cards -->
+            <div class="row g-3 mb-4">
+                <div class="col-xl-2 col-md-4 col-6">
+                    <div class="card card-custom stat-card p-3">
+                        <div class="text-muted small fw-bold">Total Pickups Assigned</div>
+                        <h3 id="rptTotalRequests" class="fw-bold text-dark mb-0">0</h3>
+                    </div>
+                </div>
+                <div class="col-xl-2 col-md-4 col-6">
+                    <div class="card card-custom stat-card p-3">
+                        <div class="text-muted small fw-bold">Completed Collections</div>
+                        <h3 id="rptCompletedRequests" class="fw-bold text-success mb-0">0</h3>
+                    </div>
+                </div>
+                <div class="col-xl-2 col-md-4 col-6">
+                    <div class="card card-custom stat-card p-3">
+                        <div class="text-muted small fw-bold">Pending / Active Jobs</div>
+                        <h3 id="rptPendingJobs" class="fw-bold text-warning mb-0">0</h3>
+                    </div>
+                </div>
+                <div class="col-xl-2 col-md-4 col-6">
+                    <div class="card card-custom stat-card p-3">
+                        <div class="text-muted small fw-bold">Completion Rate</div>
+                        <h3 id="rptCompletionRate" class="fw-bold text-info mb-0">0%</h3>
+                    </div>
+                </div>
+                <div class="col-xl-2 col-md-4 col-6">
+                    <div class="card card-custom stat-card p-3">
+                        <div class="text-muted small fw-bold">Total Revenue</div>
+                        <h3 id="rptTotalPaid" class="fw-bold text-success mb-0">$0.00</h3>
+                    </div>
+                </div>
+                <div class="col-xl-2 col-md-4 col-6">
+                    <div class="card card-custom stat-card p-3">
+                        <div class="text-muted small fw-bold">Outstanding Balance</div>
+                        <h3 id="rptUnpaidBalance" class="fw-bold text-danger mb-0">$0.00</h3>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Report Table -->
+            <div class="card card-custom p-0 overflow-hidden shadow-sm border-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0" id="rptTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th>ID</th>
+                                <th>User Name</th>
+                                <th>Role</th>
+                                <th>Address / Location</th>
+                                <th>Assigned Driver</th>
+                                <th>Date/Time</th>
+                                <th>Job Status</th>
+                                <th>Amount</th>
+                                <th>Payment Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rptTableBody">
+                            <tr>
+                                <td class="fw-bold">#107</td>
+                                <td class="fw-semibold">Yahye Abdi</td>
+                                <td><span class="badge bg-success">Resident</span></td>
+                                <td>Hodan District, Street 4</td>
+                                <td>Malik</td>
+                                <td>Aug 12, 2026</td>
+                                <td><span class="badge bg-success">Completed</span></td>
+                                <td class="fw-bold text-success">$15.00</td>
+                                <td><span class="badge bg-success">Paid</span></td>
+                            </tr>
+                            <tr>
+                                <td class="fw-bold">#106</td>
+                                <td class="fw-semibold">Maryan Ali</td>
+                                <td><span class="badge bg-success">Resident</span></td>
+                                <td>Waberi Zone B, House 12</td>
+                                <td>Malik</td>
+                                <td>Aug 12, 2026</td>
+                                <td><span class="badge bg-success">Completed</span></td>
+                                <td class="fw-bold text-success">$45.00</td>
+                                <td><span class="badge bg-success">Paid</span></td>
+                            </tr>
+                            <tr>
+                                <td class="fw-bold">#105</td>
+                                <td class="fw-semibold">Ahmed Noor</td>
+                                <td><span class="badge bg-success">Resident</span></td>
+                                <td>Karan District, Sector 3</td>
+                                <td>-</td>
+                                <td>Aug 11, 2026</td>
+                                <td><span class="badge bg-warning text-dark">Pending</span></td>
+                                <td class="fw-bold text-warning">$15.00</td>
+                                <td><span class="badge bg-warning text-dark">Unpaid</span></td>
+                            </tr>
+                            <tr>
+                                <td class="fw-bold">#104</td>
+                                <td class="fw-semibold">Nafiso Omar</td>
+                                <td><span class="badge bg-success">Resident</span></td>
+                                <td>Daynile Area, Block C</td>
+                                <td>Malik</td>
+                                <td>Aug 10, 2026</td>
+                                <td><span class="badge bg-success">Completed</span></td>
+                                <td class="fw-bold text-success">$15.00</td>
+                                <td><span class="badge bg-success">Paid</span></td>
+                            </tr>
+                            <tr>
+                                <td class="fw-bold">#103</td>
+                                <td class="fw-semibold">Hassan Farah</td>
+                                <td><span class="badge bg-success">Resident</span></td>
+                                <td>Howlwadaag, Street 7</td>
+                                <td>Malik</td>
+                                <td>Aug 09, 2026</td>
+                                <td><span class="badge bg-success">Completed</span></td>
+                                <td class="fw-bold text-success">$15.00</td>
+                                <td><span class="badge bg-success">Paid</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Messages Section -->
+        <div id="messages-section" class="section-container d-none">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h4 class="fw-bold text-dark mb-0"><i class="fas fa-envelope text-primary me-2"></i> Messages & Reports</h4>
+                <div class="d-flex gap-2 align-items-center flex-wrap">
+                    <input type="text" id="messagesSearch" class="form-control form-control-sm shadow-sm" placeholder="Search sender, message..." style="width: 220px;" oninput="filterMessagesTable()" onkeyup="filterMessagesTable()">
+                    <select id="messagesRoleFilter" class="form-select form-select-sm shadow-sm" style="width: auto;" onchange="filterMessagesTable()">
+                        <option value="all">All Messages</option>
+                        <option value="resident">Only Residents</option>
+                        <option value="driver">Only Drivers</option>
+                    </select>
+                    <button class="btn btn-outline-secondary btn-sm shadow-sm text-nowrap" onclick="markAllMessagesRead()"><i class="fas fa-check-double"></i> Mark All as Read</button>
+                </div>
+            </div>
+            <div class="card card-custom p-0 overflow-hidden shadow-sm border-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Date/Time</th>
+                                <th>Sender</th>
+                                <th>Role</th>
+                                <th>Message</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="all-messages-tbody">
+                            <tr>
+                                <td>Aug 12, 2:35 PM</td>
+                                <td class="fw-bold">Yahye Abdi</td>
+                                <td><span class="badge bg-success">Resident</span></td>
+                                <td>Waste pickup completed successfully. Thanks!</td>
+                                <td><span class="badge bg-light text-dark border">Read</span></td>
+                                <td><button class="btn btn-sm btn-outline-primary" onclick="alert('Reply to Yahye Abdi')"><i class="fas fa-reply me-1"></i> Reply</button></td>
+                            </tr>
+                            <tr>
+                                <td>Aug 12, 11:20 AM</td>
+                                <td class="fw-bold">Maryan Ali</td>
+                                <td><span class="badge bg-success">Resident</span></td>
+                                <td>Scheduled recycling waste collection at Waberi.</td>
+                                <td><span class="badge bg-light text-dark border">Read</span></td>
+                                <td><button class="btn btn-sm btn-outline-primary" onclick="alert('Reply to Maryan Ali')"><i class="fas fa-reply me-1"></i> Reply</button></td>
+                            </tr>
+                            <tr>
+                                <td>Aug 11, 9:05 AM</td>
+                                <td class="fw-bold">Ahmed Noor</td>
+                                <td><span class="badge bg-success">Resident</span></td>
+                                <td>Request submitted for hazardous waste collection.</td>
+                                <td><span class="badge bg-warning text-dark">Unread</span></td>
+                                <td><button class="btn btn-sm btn-outline-primary" onclick="alert('Reply to Ahmed Noor')"><i class="fas fa-reply me-1"></i> Reply</button></td>
+                            </tr>
+                            <tr>
+                                <td>Aug 10, 5:00 PM</td>
+                                <td class="fw-bold">Malik</td>
+                                <td><span class="badge bg-primary">Driver</span></td>
+                                <td>Finished route in Hodan Zone A. Truck TR-401 emptied.</td>
+                                <td><span class="badge bg-light text-dark border">Read</span></td>
+                                <td><button class="btn btn-sm btn-outline-primary" onclick="alert('Reply to Malik')"><i class="fas fa-reply me-1"></i> Reply</button></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ACTIVITIES & MONITORING SECTION -->
+        <div id="activities-section" class="section-container d-none">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h4 class="fw-bold text-dark mb-0"><i class="fas fa-server text-info me-2"></i> System Monitoring & Reports</h4>
+            </div>
+
+            <div class="row g-4 mb-4">
+                <!-- System Health -->
+                <div class="col-lg-4">
+                    <div class="card card-custom p-3 h-100">
+                        <h6 class="fw-bold mb-3 text-dark">System Health Status</h6>
+                        <div class="d-flex align-items-center mb-3">
+                            <i class="fas fa-database text-success fs-3 me-3"></i>
+                            <div>
+                                <h6 class="mb-0">Database Server</h6>
+                                <small class="text-success fw-bold"><i class="fas fa-circle text-success me-1" style="font-size: 8px;"></i>Online & Healthy</small>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-center mb-3">
+                            <i class="fas fa-network-wired text-success fs-3 me-3"></i>
+                            <div>
+                                <h6 class="mb-0">API Gateway</h6>
+                                <small class="text-success fw-bold"><i class="fas fa-circle text-success me-1" style="font-size: 8px;"></i>99.9% Uptime</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Generate Reports -->
+                <div class="col-lg-8">
+                    <div class="card card-custom p-3 h-100">
+                        <h6 class="fw-bold mb-3 text-dark">Generate Custom Reports</h6>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label text-muted small">Report Type</label>
+                                <select class="form-select" id="reportType">
+                                    <option>Waste Collection Summary</option>
+                                    <option>Driver Performance Report</option>
+                                    <option>Financial & Payments Report</option>
+                                    <option>System Error Logs</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label text-muted small">Date Range</label>
+                                <select class="form-select" id="reportDateRange">
+                                    <option>Last 7 Days</option>
+                                    <option>This Month</option>
+                                    <option>Last Month</option>
+                                    <option>Custom Date Range</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mt-4 text-end">
+                            <button class="btn btn-outline-secondary me-2" onclick="generateReport('preview')"><i class="fas fa-eye"></i> Preview</button>
+                            <button class="btn btn-outline-primary me-2" onclick="generateReport('print')"><i class="fas fa-print"></i> Print</button>
+                            <button class="btn btn-primary" onclick="generateReport('pdf')"><i class="fas fa-download"></i> Download PDF</button>
+                            <button class="btn btn-success" onclick="generateReport('excel')"><i class="fas fa-file-excel"></i> Export Excel</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- System Activity Logs -->
+            <div class="row">
+                <div class="col-12">
+                    <div class="card card-custom p-0 overflow-hidden">
+                        <div class="card-header bg-white border-bottom-0 pt-4 pb-0 px-4 d-flex justify-content-between align-items-center">
+                            <h6 class="fw-bold mb-0 text-dark">Live System Activity Logs</h6>
+                            <div class="d-flex align-items-center gap-2">
+                                <button class="btn btn-sm btn-outline-secondary rounded-circle px-2" title="Refresh Logs" onclick="refreshLogs()"><i class="fas fa-sync-alt"></i></button>
+                                <button class="btn btn-sm btn-outline-danger" title="Clear Logs" onclick="clearLogs()"><i class="fas fa-trash-alt me-1"></i> Clear</button>
+                                <span class="badge bg-danger pulse-animation rounded-pill px-3 py-2 ms-2"><i class="fas fa-circle me-1" style="font-size: 8px;"></i> LIVE</span>
+                            </div>
+                        </div>
+                        <div class="card-body p-4">
+                            <div class="activity-log-list" id="activityLogsContainer" style="max-height: 350px; overflow-y: auto;">
+                                <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <span class="badge bg-success me-2">Success</span>
+                                        <span class="fw-semibold text-dark">Waste Request #107 marked as Completed by Driver Malik</span>
+                                    </div>
+                                    <small class="text-muted">Aug 12, 2:30 PM</small>
+                                </div>
+                                <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <span class="badge bg-primary me-2">Payment</span>
+                                        <span class="fw-semibold text-dark">Payment received: $45.00 from Maryan Ali via EVC Plus</span>
+                                    </div>
+                                    <small class="text-muted">Aug 12, 11:15 AM</small>
+                                </div>
+                                <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <span class="badge bg-warning text-dark me-2">Pending</span>
+                                        <span class="fw-semibold text-dark">New request #105 created by resident Ahmed Noor (Karan)</span>
+                                    </div>
+                                    <small class="text-muted">Aug 11, 9:00 AM</small>
+                                </div>
+                                <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <span class="badge bg-info text-dark me-2">System</span>
+                                        <span class="fw-semibold text-dark">Daily automated backup completed successfully (MySQL Database)</span>
+                                    </div>
+                                    <small class="text-muted">Aug 11, 1:00 AM</small>
+                                </div>
+                            </div>
+
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SETTINGS SECTION -->
+        <div id="settings-section" class="section-container d-none">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h4 class="fw-bold text-dark mb-0"><i class="fas fa-cog text-secondary me-2"></i> System Settings</h4>
+            </div>
+
+            <div class="row g-4">
+                <!-- System Preferences -->
+                <div class="col-lg-6">
+                    <div class="card card-custom p-4 h-100">
+                        <h6 class="fw-bold mb-4 text-dark border-bottom pb-2">Global System Preferences</h6>
+                        
+                        <div class="mb-4 d-flex justify-content-between align-items-center">
+                            <div>
+                                <label class="form-label text-muted small fw-semibold mb-0">Dark Mode</label>
+                                <p class="text-muted small mb-0" style="font-size: 12px;">Enable dark theme for the dashboard</p>
+                            </div>
+                            <div class="form-check form-switch fs-5">
+                                <input class="form-check-input" type="checkbox" id="darkModeToggle" onclick="toggleDarkMode()">
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label text-muted small fw-semibold">System Timezone</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light text-secondary"><i class="fas fa-clock"></i></span>
+                                <select class="form-select" id="systemTimezone">
+                                    <option>Africa/Mogadishu (EAT)</option>
+                                    <option>Africa/Nairobi (EAT)</option>
+                                    <option>UTC (Universal Coordinated Time)</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label class="form-label text-muted small fw-semibold">Currency Display</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light text-secondary"><i class="fas fa-dollar-sign"></i></span>
+                                <select class="form-select" id="systemCurrency">
+                                    <option>USD ($) / EVC Plus</option>
+                                    <option>SOS (Somali Shilling)</option>
+                                    <option>EUR (€)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label text-muted small fw-semibold">Dashboard Language</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light text-secondary"><i class="fas fa-globe"></i></span>
+                                <select class="form-select" id="systemLanguage">
+                                    <option>English (US)</option>
+                                    <option>Somali</option>
+                                    <option>Arabic</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Notification Settings -->
+                <div class="col-lg-6">
+                    <div class="card card-custom p-4 h-100">
+                        <h6 class="fw-bold mb-4 text-dark border-bottom pb-2">Notification Settings</h6>
+                        
+                        <div class="form-check form-switch mb-4">
+                            <input class="form-check-input" type="checkbox" id="notifEmail" checked>
+                            <label class="form-check-label" for="notifEmail">Email Notifications for New Requests</label>
+                            <small class="text-muted d-block" style="font-size:12px;">Get an email every time a resident makes a new waste collection request.</small>
+                        </div>
+                        
+                        <div class="form-check form-switch mb-4">
+                            <input class="form-check-input" type="checkbox" id="notifSms">
+                            <label class="form-check-label" for="notifSms">SMS Alerts for Failed Payments</label>
+                            <small class="text-muted d-block" style="font-size:12px;">Immediate SMS alert to Admin if a payment transaction fails.</small>
+                        </div>
+                        
+                        <div class="form-check form-switch mb-4">
+                            <input class="form-check-input" type="checkbox" id="notifWeekly" checked>
+                            <label class="form-check-label" for="notifWeekly">Receive Weekly System Summary</label>
+                            <small class="text-muted d-block" style="font-size:12px;">Automated PDF report sent to your email every Sunday.</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 mt-4 text-end">
+                    <button type="button" class="btn btn-success px-4 py-2 shadow-sm fw-bold" onclick="saveSystemSettings()"><i class="fas fa-save me-2"></i> Save All Settings</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- PROFILE SECTION -->
+        <div id="profile-section" class="section-container d-none">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h4 class="fw-bold text-dark mb-0"><i class="fas fa-user-circle text-primary me-2"></i> Admin Profile</h4>
+            </div>
+
+            <div class="row g-4">
+                <!-- Profile Settings -->
+                <div class="col-lg-6">
+                    <div class="card card-custom p-4 h-100">
+                        <h6 class="fw-bold mb-4 text-dark border-bottom pb-2">Personal Information</h6>
+                        <div class="d-flex align-items-center mb-4">
+                            <img src="https://ui-avatars.com/api/?name=Maryan+Ali&background=2e7d32&color=fff" class="rounded-circle shadow-sm me-4" width="80" height="80" style="object-fit: cover;" id="profileSettingsPic" onerror="this.onerror=null; this.src='https://ui-avatars.com/api/?name=' + encodeURIComponent(document.getElementById('profileName')?.value || 'Maryan Ali') + '&background=2e7d32&color=fff';">
+                            <div>
+                                <button class="btn btn-sm btn-outline-primary mb-2" type="button" onclick="document.getElementById('profileImageUpload').click()"><i class="fas fa-camera me-1"></i> Upload Photo</button>
+                                <input type="file" id="profileImageUpload" accept="image/png, image/jpeg" style="display:none;" onchange="handleProfileImageUpload(event)">
+                                <p class="text-muted small mb-0">Allowed formats: JPG, PNG. Max size: 2MB.</p>
+                            </div>
+                        </div>
+                        
+                        <form id="profileFormDetails" onsubmit="saveProfileDetails(event)">
+                            <div class="mb-3">
+                                <label class="form-label text-muted small fw-semibold">Full Name</label>
+                                <input type="text" class="form-control" id="profileName" value="Admin User" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label text-muted small fw-semibold">Email Address</label>
+                                <input type="email" class="form-control" id="profileEmail" value="admin@smartwaste.com" required>
+                                <small class="text-muted" style="font-size: 12px;"><i class="fas fa-lock me-1"></i> Contact IT support to change your email.</small>
+                            </div>
+                            <div class="mb-4">
+                                <label class="form-label text-muted small fw-semibold">Role / Position</label>
+                                <input type="text" class="form-control bg-light" id="profileRole" value="Super Administrator" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary shadow-sm">Save Profile</button>
+                        </form>
+                    </div>
+                </div>
+                
+                <!-- Security Settings -->
+                <div class="col-lg-6">
+                    <div class="card card-custom p-4 h-100">
+                        <h6 class="fw-bold mb-4 text-dark border-bottom pb-2">Security & Password</h6>
+                        <div class="alert alert-warning border-0" style="background-color: #fff3cd; color: #856404; font-size: 13px;">
+                            <i class="fas fa-exclamation-triangle me-2"></i> It is highly recommended to change your password every 90 days.
+                        </div>
+                        <form id="passwordFormProfile" onsubmit="updatePassword(event)">
+                            <div class="mb-3">
+                                <label class="form-label text-muted small fw-semibold">Current Password</label>
+                                <input type="password" class="form-control" id="currentPassword" placeholder="Enter current password" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label text-muted small fw-semibold">New Password</label>
+                                <input type="password" class="form-control" id="newPassword" placeholder="Create new password" required>
+                            </div>
+                            <div class="mb-4">
+                                <label class="form-label text-muted small fw-semibold">Confirm New Password</label>
+                                <input type="password" class="form-control" id="confirmPassword" placeholder="Confirm new password" required>
+                            </div>
+                            <div class="mt-4">
+                                <button type="submit" class="btn btn-danger shadow-sm"><i class="fas fa-key me-2"></i> Update Password</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Assign Driver Modal (Used in Requests Section) -->
+        <div class="modal fade" id="assignDriverModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content border-0 shadow">
+                    <div class="modal-header border-bottom-0">
+                        <h5 class="modal-title fw-bold">Assign Driver to Request</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="hidden" id="assignRequestId">
+                        <div class="mb-3">
+                            <label class="form-label text-muted">Select Available Driver</label>
+                            <select class="form-select" id="assignDriverSelect">
+                                <option value="">Loading drivers...</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-top-0">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary" onclick="confirmAssignDriver()">Assign Now</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Edit Request Modal -->
+        <div class="modal fade" id="editRequestModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content border-0 shadow">
+                    <div class="modal-header border-bottom-0">
+                        <h5 class="modal-title fw-bold">Edit Request</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <form id="editRequestForm">
+                        <div class="modal-body">
+                            <input type="hidden" id="edit_req_id">
+                            <div class="mb-3">
+                                <label class="form-label text-muted">Status</label>
+                                <select class="form-select" id="edit_req_status" required>
+                                    <option value="Accepted">Accepted</option>
+                                    <option value="Assigned">Assigned</option>
+                                    <option value="In Progress">In Progress</option>
+                                    <option value="Completed">Completed</option>
+                                    <option value="Cancelled">Cancelled</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label text-muted">Assigned Driver</label>
+                                <select class="form-select" id="edit_req_driver">
+                                    <option value="">-- No Driver --</option>
+                                    <!-- Populated via JS -->
+                                </select>
+                            </div>
+                        </div>
+                        <div class="modal-footer border-top-0">
+                            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Save Changes</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- Message Modal -->
+        <div class="modal fade" id="messageModal" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content border-0 shadow">
+                    <div class="modal-header bg-primary text-white border-bottom-0">
+                        <h5 class="modal-title fw-bold" id="msgModalTitle">Message</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <div class="d-flex justify-content-between border-bottom pb-2 mb-3">
+                            <small class="text-muted" id="msgModalTime"></small>
+                            <small class="text-primary fw-bold" id="msgModalArea"></small>
+                        </div>
+                        <p class="fs-6 text-dark" id="msgModalContent" style="white-space: pre-wrap;"></p>
+                        
+                        <div class="mt-4 border-top pt-3">
+                            <label for="replyMessage" class="form-label fw-bold text-muted small"><i class="fas fa-reply text-primary me-1"></i> Send Reply to User</label>
+                            <textarea class="form-control" id="replyMessage" rows="3" placeholder="Type your reply here..."></textarea>
+                            <input type="hidden" id="replySenderId">
+                            <input type="hidden" id="replySenderType">
+                            <input type="hidden" id="replyOriginalContent">
+                        </div>
+                    </div>
+                    <div class="modal-footer border-top-0 d-flex justify-content-between">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Close</button>
+                        <button type="button" class="btn btn-primary" onclick="sendReply()">Send Reply <i class="bi bi-send ms-1"></i></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Resident History Modal -->
+        <div class="modal fade" id="residentHistoryModal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content border-0 shadow">
+                    <div class="modal-header border-bottom-0">
+                        <h5 class="modal-title fw-bold" id="residentHistoryTitle">Resident Request History</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body p-0">
+                        <!-- Resident Profile Info Header -->
+                        <div id="residentProfileHeader" class="bg-light p-3 border-bottom">
+                            <!-- Loaded via JS -->
+                        </div>
+                        <div class="p-3 bg-white border-bottom">
+                            <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-history text-primary me-2"></i>Waste Request History</h6>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Date/Time</th>
+                                        <th>Waste Type</th>
+                                        <th>Driver</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="resident-history-tbody">
+                                    <tr><td colspan="4" class="text-center py-4">Loading history...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-top-0">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Driver Details & Jobs Modal -->
+        <div class="modal fade" id="driverDetailsModal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content border-0 shadow">
+                    <div class="modal-header border-bottom-0">
+                        <h5 class="modal-title fw-bold" id="driverDetailsTitle">Driver Profile & Assigned Jobs</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body p-0">
+                        <!-- Driver Profile Info Header -->
+                        <div id="driverProfileHeader" class="bg-light p-3 border-bottom">
+                            <!-- Loaded via JS -->
+                        </div>
+                        <div class="p-3 bg-white border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-tasks text-primary me-2"></i>Assigned Jobs & Pickup History</h6>
+                            <div class="d-flex gap-2 flex-wrap">
+                                <button class="btn btn-sm btn-outline-danger shadow-sm font-semibold" onclick="exportCurrentDriverReportPDF()"><i class="fas fa-file-pdf me-1"></i> Export PDF Report</button>
+                                <button class="btn btn-sm btn-outline-success shadow-sm font-semibold" onclick="exportCurrentDriverReportExcel()"><i class="fas fa-file-excel me-1"></i> Export Excel</button>
+                                <button class="btn btn-sm btn-success shadow-sm font-semibold" onclick="openCurrentDriverInAnalytics()"><i class="fas fa-chart-line me-1"></i> View in Reports & Analytics</button>
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Date/Time</th>
+                                        <th>Resident</th>
+                                        <th>Waste Type</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="driver-history-tbody">
+                                    <tr><td colspan="4" class="text-center py-4">Loading driver jobs...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-top-0">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    <!-- Register New Driver Modal (Manager Onboarding) -->
+    <div class="modal fade" id="addDriverModal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+                <div class="modal-header bg-success text-white py-3">
+                    <h5 class="modal-title fw-bold"><i class="fas fa-user-plus me-2"></i> Register New Driver & Assign Fleet Truck</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="addDriverForm" onsubmit="submitAdminAddDriver(event)">
+                    <div class="modal-body p-4">
+                        <div class="alert alert-success bg-success bg-opacity-10 border-0 text-success small mb-3">
+                            <i class="fas fa-info-circle me-1"></i> <strong>Manager In-Person Onboarding:</strong> Register a driver who has completed the interview and contract at the office. Assign their dedicated Mogadishu zone and pickup truck.
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label text-dark small fw-bold">Full Name <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light"><i class="fas fa-user text-muted"></i></span>
+                                    <input type="text" class="form-control" id="add_d_name" placeholder="e.g. Abdirahman Shire" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label text-dark small fw-bold">Phone Number <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light"><i class="fas fa-phone text-muted"></i></span>
+                                    <input type="tel" class="form-control" id="add_d_phone" placeholder="e.g. +252 61 500 1234" inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9+ ]/g, '')" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label text-dark small fw-bold">Email Address <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light"><i class="fas fa-envelope text-muted"></i></span>
+                                    <input type="email" class="form-control" id="add_d_email" placeholder="e.g. driver@waste.com" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label text-dark small fw-bold">Initial Password <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light"><i class="fas fa-lock text-muted"></i></span>
+                                    <input type="password" class="form-control" id="add_d_password" placeholder="Create password (min 4 chars)" required minlength="4">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label text-dark small fw-bold">Driver License Number <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light"><i class="fas fa-id-card text-muted"></i></span>
+                                    <input type="text" class="form-control" id="add_d_license" placeholder="e.g. DL-MOG-7842" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label text-dark small fw-bold">Emergency Contact</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light"><i class="fas fa-ambulance text-muted"></i></span>
+                                    <input type="text" class="form-control" id="add_d_emergency" placeholder="e.g. Family (+252614840501)">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label text-dark small fw-bold">Assigned District / Zone <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light"><i class="fas fa-map-marker-alt text-muted"></i></span>
+                                    <select class="form-select" id="add_d_zone" onchange="onZoneSelectForTrucks(this.value)" required>
+                                        <option value="" disabled selected>Select Designated District (1 Driver per District)...</option>
+                                        <option value="Wadajir">Wadajir</option>
+                                        <option value="Hodan">Hodan</option>
+                                        <option value="Waberi">Waberi</option>
+                                        <option value="Deyniile">Deyniile</option>
+                                        <option value="Karaan">Karaan</option>
+                                        <option value="Hamarweyne">Hamarweyne</option>
+                                        <option value="Howlwadaag">Howlwadaag</option>
+                                        <option value="Kaxda">Kaxda</option>
+                                        <option value="Shangani">Shangani</option>
+                                        <option value="Shibis">Shibis</option>
+                                        <option value="Bondhere">Bondhere</option>
+                                        <option value="Abdiaziz">Abdiaziz</option>
+                                        <option value="Dharkenley">Dharkenley</option>
+                                        <option value="Garasbaley">Garasbaley</option>
+                                        <option value="Yaqshid">Yaqshid</option>
+                                        <option value="Huriwa">Huriwa</option>
+                                        <option value="Warta Nabada">Warta Nabada</option>
+                                        <option value="Hamar Jajab">Hamar Jajab</option>
+                                    </select>
+                                </div>
+                                <small class="text-muted" style="font-size: 11px;">Pickups in this district will be dispatched to this driver.</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label text-dark small fw-bold">Vehicle Number Plate <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-success bg-opacity-10 text-success fw-bold border-end-0" style="letter-spacing: 1px;">
+                                        <i class="fas fa-truck me-1"></i> BU-
+                                    </span>
+                                    <input type="text" class="form-control fw-bold border-start-0 ps-1" id="add_d_plate_num" list="fleetTrucksList" placeholder="101" required>
+                                    <datalist id="fleetTrucksList">
+                                        <!-- Populated dynamically with available fleet numbers -->
+                                    </datalist>
+                                </div>
+                                <small class="text-muted" style="font-size: 11px;" id="truckHelpText"><i class="fas fa-info-circle text-primary me-1"></i> Type the vehicle number (e.g. <b>101</b> to assign <b>BU-101</b>).</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-0 p-3 pt-0">
+                        <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" id="addDriverSubmitBtn" class="btn btn-success rounded-pill px-4 fw-bold shadow-sm">
+                            <i class="fas fa-check-circle me-1"></i> Register & Onboard Driver
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Driver Modal -->
+    <div class="modal fade" id="editDriverModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header border-bottom-0">
+                    <h5 class="modal-title fw-bold">Edit Driver Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="editDriverForm">
+                    <div class="modal-body">
+                        <input type="hidden" id="edit_d_id">
+                        <div class="mb-3">
+                            <label class="form-label text-muted">Full Name</label>
+                            <input type="text" class="form-control" id="edit_d_name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted">Phone Number</label>
+                            <input type="tel" class="form-control" id="edit_d_phone" placeholder="e.g. +252 614840501" inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9+ ]/g, '')" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted">Assigned Zone</label>
+                            <select class="form-select" id="edit_d_zone" required>
+                                <option value="Abdiaziz">Abdiaziz</option>
+                                <option value="Bondhere">Bondhere</option>
+                                <option value="Deyniile">Deyniile</option>
+                                <option value="Dharkenley">Dharkenley</option>
+                                <option value="Garasbaley">Garasbaley</option>
+                                <option value="Hamar Jajab">Hamar Jajab</option>
+                                <option value="Hamarweyne">Hamarweyne</option>
+                                <option value="Hodan">Hodan</option>
+                                <option value="Howlwadaag">Howlwadaag</option>
+                                <option value="Huriwa">Huriwa</option>
+                                <option value="Kaxda">Kaxda</option>
+                                <option value="Karaan">Karaan</option>
+                                <option value="Shangani">Shangani</option>
+                                <option value="Shibis">Shibis</option>
+                                <option value="Waberi">Waberi</option>
+                                <option value="Wadajir">Wadajir</option>
+                                <option value="Warta Nabada">Warta Nabada</option>
+                                <option value="Yaqshid">Yaqshid</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted">Vehicle Info</label>
+                            <input type="text" class="form-control" id="edit_d_vehicle" placeholder="e.g. T-1234 / Isuzu Dump">
+                        </div>
+                    </div>
+                    <div class="modal-footer border-top-0">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Resident Modal -->
+    <div class="modal fade" id="editResidentModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header border-bottom-0">
+                    <h5 class="modal-title fw-bold">Edit Resident Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="editResidentForm" onsubmit="saveResidentEdit(event)">
+                    <div class="modal-body">
+                        <input type="hidden" id="edit_res_id">
+                        <div class="mb-3">
+                            <label class="form-label text-muted">Full Name</label>
+                            <input type="text" class="form-control" id="edit_res_name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted">Email Address</label>
+                            <input type="email" class="form-control" id="edit_res_email" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted">Phone Number</label>
+                            <input type="tel" class="form-control" id="edit_res_phone" placeholder="e.g. +252 614840501" inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9+ ]/g, '')" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted">Address / District</label>
+                            <input type="text" class="form-control" id="edit_res_address" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted">Account Status</label>
+                            <select class="form-select" id="edit_res_status">
+                                <option value="Active">Active</option>
+                                <option value="Inactive">Inactive</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-top-0">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Approve Driver Modal -->
+    <div class="modal fade" id="approveDriverModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+                <div class="modal-header bg-success text-white py-3">
+                    <h5 class="modal-title fw-bold"><i class="fas fa-check-circle me-2"></i> Approve Driver & Assign Vehicle</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="approveDriverForm" onsubmit="submitApproveDriver(event)">
+                    <div class="modal-body p-4">
+                        <input type="hidden" id="approve_d_id">
+                        
+                        <div class="p-3 bg-light rounded-3 mb-3 border">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span class="text-muted small">Applicant Name:</span>
+                                <strong id="approve_d_name_display" class="text-dark">--</strong>
+                            </div>
+                            <div class="d-flex justify-content-between mb-1">
+                                <span class="text-muted small">Phone / Email:</span>
+                                <span id="approve_d_contact_display" class="text-dark small">--</span>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span class="text-muted small">Driver License:</span>
+                                <span id="approve_d_license_display" class="badge bg-primary">--</span>
+                            </div>
+                        </div>
+
+                        <div class="mb-2">
+                            <label class="form-label fw-bold text-dark">Assign Vehicle License Plate Number <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white text-success"><i class="fas fa-id-card"></i></span>
+                                <input type="text" class="form-control" id="approve_d_plate" placeholder="e.g. TR-402 / MOG-5511 / SL-8822" required>
+                            </div>
+                            <small class="text-muted">This plate number will be permanently locked to this driver's dashboard.</small>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-0 p-3 pt-0">
+                        <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-success rounded-pill px-4 fw-bold">
+                            <i class="fas fa-check-circle me-1"></i> Approve & Activate Driver
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reject Driver Modal -->
+    <div class="modal fade" id="rejectDriverModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+                <div class="modal-header bg-danger text-white py-3">
+                    <h5 class="modal-title fw-bold"><i class="fas fa-ban me-2"></i> Reject Driver Application</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="rejectDriverForm" onsubmit="submitRejectDriver(event)">
+                    <div class="modal-body p-4">
+                        <input type="hidden" id="reject_d_id">
+                        <p class="text-dark mb-3">
+                            Are you sure you want to reject the driver application for <strong id="reject_d_name_display">--</strong> (License: <span id="reject_d_license_display" class="badge bg-secondary">--</span>)?
+                        </p>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold text-dark">Reason for Rejection (Optional)</label>
+                            <textarea class="form-control" id="reject_d_reason" rows="3" placeholder="e.g. Incomplete verification, invalid license number, or fleet quota full..."></textarea>
+                        </div>
+                        <div class="alert alert-warning py-2 px-3 small mb-0 border-0">
+                            <i class="fas fa-exclamation-triangle me-1"></i> Note: This driver will be permanently blocked from registering again with this same license number.
+                        </div>
+                    </div>
+                    <div class="modal-footer border-0 p-3 pt-0">
+                        <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-danger rounded-pill px-4 fw-bold">
+                            <i class="fas fa-times-circle me-1"></i> Confirm Rejection
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+        <div class="admin-footer">
+            Smart Waste Collection Management System &copy; 2026 | Version 1.1<br>Enterprise Edition
+        </div>
+    </main>
+        <!-- Notification Modal -->
+        <div class="modal fade" id="notifModal" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content border-0 shadow">
+                    <div class="modal-header bg-danger text-white border-bottom-0">
+                        <h5 class="modal-title fw-bold" id="notifModalTitle">Notification</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <div class="d-flex justify-content-between border-bottom pb-2 mb-3">
+                            <small class="text-muted" id="notifModalTime"></small>
+                        </div>
+                        <p class="fs-6 text-dark" id="notifModalContent" style="white-space: pre-wrap;"></p>
+                    </div>
+                    <div class="modal-footer border-top-0 d-flex justify-content-end">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toastContainer"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+    <script src="../js/api.js?v=99000080"></script>
+    <script src="app.js?v=99000080"></script>
+    <script>
+        function renderDashboardChartsAlways(liveData) {
+            if (typeof Chart === 'undefined') return;
+            
+            // Bar Chart - Monthly Requests
+            const ctxBar = document.getElementById('barChart');
+            if (ctxBar) {
+                if (window.myBarChart) { try { window.myBarChart.destroy(); } catch(e){} }
+                window.myBarChart = new Chart(ctxBar, {
+                    type: 'bar',
+                    data: {
+                        labels: (liveData && liveData.barLabels) || ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug'],
+                        datasets: [{
+                            label: 'Requests Made',
+                            data: (liveData && liveData.bar) || [12, 19, 15, 25, 22, 30, 28, 35],
+                            backgroundColor: '#2e7d32',
+                            borderRadius: 4
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+            }
+
+            // Pie Chart - Request Status
+            const ctxPie = document.getElementById('pieChart');
+            if (ctxPie) {
+                if (window.myPieChart) { try { window.myPieChart.destroy(); } catch(e){} }
+                window.myPieChart = new Chart(ctxPie, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Completed', 'Pending', 'In Progress'],
+                        datasets: [{
+                            data: (liveData && liveData.pie) || [5, 6, 1],
+                            backgroundColor: ['#198754', '#ffc107', '#0dcaf0'],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: { cutout: '70%', responsive: true, maintainAspectRatio: false }
+                });
+            }
+
+            // Driver Chart - Performance
+            const ctxDriver = document.getElementById('driverChart');
+            if (ctxDriver) {
+                if (window.myDriverChart) { try { window.myDriverChart.destroy(); } catch(e){} }
+                window.myDriverChart = new Chart(ctxDriver, {
+                    type: 'bar',
+                    data: {
+                        labels: (liveData && liveData.driverLabels) || ['Malik', 'Ahmed', 'Hassan', 'Omar'],
+                        datasets: [{
+                            label: 'Jobs Completed',
+                            data: (liveData && liveData.driver) || [5, 3, 2, 4],
+                            backgroundColor: '#81c784',
+                            borderRadius: 4
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+            }
+        }
+
+        function renderPaymentChartsAlways(liveData) {
+            if (typeof Chart === 'undefined') return;
+
+            const canvasArea = document.getElementById('revenueAreaChart');
+            if (canvasArea) {
+                const existing = Chart.getChart(canvasArea);
+                if (existing) { try { existing.destroy(); } catch(e){} }
+                if (window.myRevenueChart) { try { window.myRevenueChart.destroy(); } catch(e){} }
+                if (window.chartInstances && window.chartInstances.revenueArea) {
+                    try { window.chartInstances.revenueArea.destroy(); } catch(e){}
+                }
+
+                const ctxArea = canvasArea.getContext('2d');
+                window.myRevenueChart = new Chart(ctxArea, {
+                    type: 'line',
+                    data: {
+                        labels: (liveData && liveData.revenueLabels) || ['Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug'],
+                        datasets: [{
+                            label: 'Revenue ($)',
+                            data: (liveData && liveData.revenueArea) || [0, 0, 0, 0, 0, 665],
+                            borderColor: '#2e7d32',
+                            backgroundColor: 'rgba(46, 125, 50, 0.15)',
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 5,
+                            pointHoverRadius: 7,
+                            pointBackgroundColor: '#2e7d32'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(val) { return '$' + val; }
+                                }
+                            }
+                        }
+                    }
+                });
+                if (window.chartInstances) window.chartInstances.revenueArea = window.myRevenueChart;
+            }
+
+            const canvasPie = document.getElementById('paymentStatusChart');
+            if (canvasPie) {
+                const existingPie = Chart.getChart(canvasPie);
+                if (existingPie) { try { existingPie.destroy(); } catch(e){} }
+                if (window.myPaymentPieChart) { try { window.myPaymentPieChart.destroy(); } catch(e){} }
+                if (window.chartInstances && window.chartInstances.paymentPie) {
+                    try { window.chartInstances.paymentPie.destroy(); } catch(e){}
+                }
+
+                const ctxPie = canvasPie.getContext('2d');
+                window.myPaymentPieChart = new Chart(ctxPie, {
+                    type: 'pie',
+                    data: {
+                        labels: ['Completed', 'Pending', 'Failed'],
+                        datasets: [{
+                            data: (liveData && liveData.paymentPie) || [16, 7, 0],
+                            backgroundColor: ['#198754', '#ffc107', '#dc3545'],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+                if (window.chartInstances) window.chartInstances.paymentPie = window.myPaymentPieChart;
+            }
+        }
+
+        async function fetchAndRenderAllCharts() {
+            try {
+                if (typeof apiCall === 'function') {
+                    const res = await apiCall('/admin.php?action=get_chart_data');
+                    if (res && res.data) {
+                        renderDashboardChartsAlways(res.data);
+                        renderPaymentChartsAlways(res.data);
+                        return;
+                    }
+                }
+            } catch(e) {}
+            renderDashboardChartsAlways();
+            renderPaymentChartsAlways();
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof loadDashboard === 'function') loadDashboard();
+            if (typeof initAdminApp === 'function') initAdminApp();
+            fetchAndRenderAllCharts();
+            setTimeout(fetchAndRenderAllCharts, 200);
+            setTimeout(fetchAndRenderAllCharts, 800);
+        });
+
+        window.addEventListener('load', function() {
+            fetchAndRenderAllCharts();
+        });
+    </script>
+</body>
+</html>

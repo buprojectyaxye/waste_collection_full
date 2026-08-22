@@ -1,0 +1,1 @@
+<?php require 'api/../backend/db.php'; $stmt = $conn->query("SELECT a.*, r.address, r.notes, r.request_time, res.name as resident_name, res.phone as resident_phone FROM assignments a JOIN requests r ON a.request_id = r.request_id JOIN residents res ON r.resident_id = res.resident_id"); print_r($stmt->fetchAll()); ?>

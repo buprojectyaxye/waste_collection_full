@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Resident Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="../css/style.css?v=77000000">
+    <style>
+        .card-custom {
+            transition: all 0.3s ease;
+        }
+        .card-custom:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important;
+        }
+        .notification-card {
+            background-color: #f0f8ff;
+            border-left: 4px solid #0d6efd;
+            margin-bottom: 10px;
+        }
+        .sidebar {
+            position: fixed;
+            top: 56px;
+            bottom: 0;
+            left: 0;
+            width: 250px;
+            background-color: #1b5e20 !important;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+            overflow-x: hidden;
+            overflow-y: auto;
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            padding: 20px 0;
+        }
+        .sidebar.collapsed {
+            width: 75px !important;
+        }
+        .sidebar.collapsed .nav-text,
+        .sidebar.collapsed span {
+            display: none !important;
+        }
+        .sidebar.collapsed .nav-link {
+            text-align: center !important;
+            justify-content: center !important;
+            padding: 12px 0 !important;
+            margin: 0 5px !important;
+        }
+        .sidebar.collapsed .nav-link i {
+            margin-right: 0 !important;
+            font-size: 1.35rem !important;
+            width: 100% !important;
+            text-align: center !important;
+        }
+        .sidebar .nav-link {
+            color: rgba(255, 255, 255, 0.85) !important;
+            transition: all 0.2s;
+            white-space: nowrap;
+            overflow: hidden;
+            font-size: 1rem;
+            margin: 0 10px;
+            padding: 12px 16px;
+            border-radius: 8px;
+        }
+        .sidebar .nav-link:hover {
+            background-color: rgba(255, 255, 255, 0.15);
+            color: white !important;
+        }
+        .sidebar .nav-link.active {
+            background-color: #2e7d32 !important;
+            color: white !important;
+        }
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 56px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1040;
+            transition: opacity 0.3s ease;
+        }
+        .sidebar-overlay.active, .sidebar-overlay.show {
+            display: block;
+        }
+
+        /* Main Content Layout */
+        .main-content {
+            margin-left: 250px !important;
+            width: calc(100% - 250px) !important;
+            min-height: calc(100vh - 56px);
+            padding: 24px 30px !important;
+            transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        }
+        .main-content.collapsed {
+            margin-left: 75px !important;
+            width: calc(100% - 75px) !important;
+        }
+
+        @media (max-width: 991.98px) {
+            .sidebar {
+                margin-left: -260px !important;
+                position: fixed;
+                top: 56px;
+                bottom: 0;
+                left: 0;
+                width: 250px !important;
+                z-index: 1050;
+                height: calc(100vh - 56px);
+                transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            }
+            .sidebar.show-mobile,
+            .sidebar.expanded,
+            .sidebar.show,
+            .sidebar.active {
+                margin-left: 0 !important;
+                box-shadow: 5px 0 25px rgba(0,0,0,0.3) !important;
+            }
+            .main-content,
+            .main-content.collapsed {
+                margin-left: 0 !important;
+                width: 100% !important;
+                padding: 16px 15px !important;
+            }
+        }
+        
+        /* Report Input Focus Style */
+        .report-input:focus {
+            border-color: #dc3545 !important;
+            box-shadow: 0 0 0 0.25rem rgba(220, 53, 69, 0.25) !important;
+            outline: 0;
+        }
+        .input-group:focus-within .input-group-text {
+            border-color: #dc3545 !important;
+        }
+        .input-group:focus-within .report-input {
+            border-color: #dc3545 !important;
+        }
+        
+        /* Badges */
+        .badge-pending {
+            background-color: #fff3cd !important;
+            color: #856404 !important;
+            border-radius: 20px;
+            padding: 5px 12px;
+        }
+        .badge-assigned {
+            background-color: #d1ecf1 !important;
+            color: #0c5460 !important;
+            border-radius: 20px;
+            padding: 5px 12px;
+        }
+        .badge-completed {
+            background-color: #d4edda !important;
+            color: #155724 !important;
+            border-radius: 20px;
+            padding: 5px 12px;
+        }
+
+        /* Grid Layout */
+        .requests-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+        }
+
+        /* Timeline Layout */
+        .timeline-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            position: relative;
+        }
+        .timeline-list::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 5px;
+            width: 2px;
+            background: #e9ecef;
+        }
+        .timeline-list li {
+            position: relative;
+            padding-left: 20px;
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+            color: #495057;
+        }
+        .timeline-list li::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 5px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #0d6efd;
+            border: 2px solid white;
+            box-shadow: 0 0 0 1px #0d6efd;
+        }
+        /* Table Styles */
+        .table-striped > tbody > tr:nth-of-type(odd) > * {
+            background-color: #ffffff;
+        }
+        .table-striped > tbody > tr:nth-of-type(even) > * {
+            background-color: #f9f9f9;
+        }
+        .table-hover > tbody > tr:hover > * {
+            background-color: #f1f3f5 !important;
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+    <!-- Header -->
+    <nav class="navbar navbar-dark bg-success sticky-top">
+        <div class="container-fluid px-4">
+            <div class="d-flex align-items-center" id="navbarBrandContainer" style="cursor: pointer;" title="Toggle / Minimize Menu">
+                <button class="btn btn-outline-light me-3" id="sidebarToggle" type="button" title="Toggle / Minimize Sidebar">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <span class="navbar-brand mb-0 h1 d-none d-sm-inline">Waste Collection Management System Resident</span>
+                <span class="navbar-brand mb-0 h1 d-inline d-sm-none">Resident</span>
+            </div>
+            <div class="d-flex align-items-center text-white">
+                <button class="btn btn-outline-light btn-sm me-2 rounded-circle d-flex align-items-center justify-content-center" onclick="toggleGlobalDarkMode()" title="Toggle Dark Mode" style="width: 34px; height: 34px;">
+                    <i class="fas fa-moon"></i>
+                </button>
+                <a href="#settings" onclick="showSection('settings')" class="text-white text-decoration-none d-flex align-items-center">
+                    <img src="" id="nav-profile-pic" class="rounded-circle d-none me-2" width="30" height="30" style="object-fit: cover;">
+                    <i class="fas fa-user-circle fs-4 me-2" id="nav-profile-icon"></i>
+                </a>
+                <button class="btn btn-outline-light btn-sm ms-2" onclick="logout()">Logout</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid p-0">
+        <div class="d-flex position-relative" style="overflow-x: hidden;">
+            <!-- Sidebar -->
+            <nav id="sidebar" class="sidebar">
+                <div class="position-sticky pt-3">
+                    <ul class="nav flex-column gap-2 p-2">
+                        <li class="nav-item">
+                            <a class="nav-link active rounded" href="#dashboard" onclick="showSection('dashboard')">
+                                <i class="fas fa-chart-bar me-2"></i> <span class="nav-text">Dashboard</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link rounded" href="#requests" onclick="showSection('requests')">
+                                <i class="fas fa-clipboard-list me-2"></i> <span class="nav-text">My Requests</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link rounded" href="#payments" onclick="showSection('payments')">
+                                <i class="fas fa-credit-card me-2"></i> <span class="nav-text">Payments</span>
+                            </a>
+                        </li>
+                        <li class="nav-item mt-4">
+                            <a class="nav-link rounded" href="#settings" onclick="showSection('settings')">
+                                <i class="fas fa-cog me-2"></i> <span class="nav-text">Settings</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
+            <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+            <!-- Main Content -->
+            <main class="main-content" id="mainContent">
+                
+                <!-- Dashboard Section -->
+                <div id="dashboard-section" class="section-container">
+                    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                        <h1 class="h2 mb-0">Welcome back, <span id="user-name" style="text-transform: capitalize;"></span></h1>
+                        <button class="btn btn-outline-success btn-sm font-semibold shadow-sm" onclick="downloadResidentStatementPDF()"><i class="fas fa-file-pdf me-1"></i> Download Personal Statement (PDF)</button>
+                    </div>
+                    
+                    <div class="row g-4 mb-4">
+                        <div class="col-md-6">
+                            <div class="card card-custom h-100 border-0 bg-light p-4 d-flex flex-column" style="border-radius: 14px;">
+                                <div class="flex-grow-1">
+                                    <h4 class="fw-bold">🚚 Need a pickup?</h4>
+                                    <p class="text-muted">Schedule your waste collection easily right now.</p>
+                                </div>
+                                <button class="btn btn-success mt-auto fw-bold" style="border-radius: 8px; padding: 10px 20px;" data-bs-toggle="modal" data-bs-target="#newRequestModal">Schedule New Pickup</button>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card card-custom h-100 border-0 bg-light p-4 d-flex flex-column" style="border-radius: 14px;">
+                                <div class="flex-grow-1">
+                                    <h4 class="fw-bold">⚠️ Report Issue</h4>
+                                    <p class="text-muted">Contact the admin team or report any problem easily right now.</p>
+                                </div>
+                                <button class="btn btn-danger mt-auto text-white fw-bold" style="border-radius: 8px; padding: 10px 20px;" data-bs-toggle="modal" data-bs-target="#reportModal">Send a Report</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h4>Recent Notifications</h4>
+                    <ul class="list-group list-group-flush" id="notifications-list">
+                        <!-- Loaded via JS -->
+                    </ul>
+                </div>
+
+                <!-- Requests Section -->
+                <div id="requests-section" class="section-container d-none">
+                    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                        <h1 class="h2">My Pick-up Requests</h1>
+                        <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#newRequestModal">New Request</button>
+                    </div>
+                    
+                    <!-- Filter Tabs -->
+                    <ul class="nav nav-pills mb-4" id="requestFilterTabs" style="gap: 10px;">
+                        <li class="nav-item">
+                            <a class="nav-link active rounded-pill fw-bold" href="#" data-filter="All" style="padding: 6px 20px;">All</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-muted rounded-pill fw-bold" href="#" data-filter="Pending" style="padding: 6px 20px;">Pending</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-muted rounded-pill fw-bold" href="#" data-filter="Assigned" style="padding: 6px 20px;">Assigned</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-muted rounded-pill fw-bold" href="#" data-filter="Completed" style="padding: 6px 20px;">Completed</a>
+                        </li>
+                    </ul>
+
+                    <div class="requests-grid" id="requests-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 24px;">
+                        <!-- Loaded via JS -->
+                    </div>
+                </div>
+
+                <!-- Payments Section -->
+                <div id="payments-section" class="section-container d-none">
+                    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                        <h1 class="h2">Payment History</h1>
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover align-middle" id="payments-table">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Payment ID</th>
+                                    <th>Date</th>
+                                    <th>Amount</th>
+                                    <th>Method</th>
+                                    <th>Status</th>
+                                    <th>Receipt</th>
+                                </tr>
+                            </thead>
+                            <tbody id="payments-tbody">
+                                <!-- Payments loaded here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            <!-- Settings Section -->
+            <div id="settings-section" class="section-container d-none">
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                    <h1 class="h2">Profile Settings</h1>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-8 mx-auto">
+                        <ul class="nav nav-tabs mb-4" id="settingsTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active fw-bold" id="profile-tab" data-bs-toggle="tab" data-bs-target="#profile-settings" type="button" role="tab">
+                                    <i class="fas fa-user-circle me-1"></i> Profile Info
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link fw-bold" id="security-tab" data-bs-toggle="tab" data-bs-target="#security-settings" type="button" role="tab">
+                                    <i class="fas fa-lock me-1"></i> Security
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link fw-bold" id="notifications-tab" data-bs-toggle="tab" data-bs-target="#notifications-settings" type="button" role="tab">
+                                    <i class="fas fa-bell me-1"></i> Notifications
+                                </button>
+                            </li>
+                        </ul>
+                        
+                        <div class="tab-content" id="settingsTabContent">
+                            <!-- Profile Tab -->
+                            <div class="tab-pane fade show active" id="profile-settings" role="tabpanel">
+                                <div class="card border-0 shadow-sm">
+                                    <div class="card-body p-4">
+                                        <!-- Profile Picture Instant Upload Box -->
+                                        <div class="text-center mb-4">
+                                            <div class="position-relative d-inline-block">
+                                                <img src="data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200' viewBox='0 0 300 200'%3E%3Crect width='100%25' height='100%25' fill='%23e9ecef'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='14' fill='%236c757d'%3ENo Photo Available%3C/text%3E%3C/svg%3E" id="profile-preview" class="rounded-circle border shadow-sm" width="110" height="110" style="object-fit: cover;">
+                                                <label for="profile-picture" class="position-absolute bottom-0 end-0 bg-success text-white rounded-circle p-1 cursor-pointer shadow" style="cursor: pointer; width: 34px; height: 34px; line-height: 26px; border: 2px solid #fff;" title="Change Profile Picture">
+                                                    <i class="fas fa-camera"></i>
+                                                </label>
+                                                <input type="file" id="profile-picture" name="profile_picture" class="d-none" accept="image/*" onchange="uploadResidentProfilePic(this)">
+                                            </div>
+                                            <div class="small text-muted mt-2">Click the camera icon to instantly update your photo</div>
+                                        </div>
+
+                                        <form id="profileForm" onsubmit="updateResidentProfile(event)">
+                                            <div class="row g-3">
+                                                <div class="col-md-6">
+                                                    <label class="form-label fw-semibold text-secondary small">Full Name</label>
+                                                    <div class="input-group">
+                                                        <span class="input-group-text bg-light border-end-0"><i class="fas fa-user text-muted"></i></span>
+                                                        <input type="text" class="form-control border-start-0" id="profile-name" required>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label class="form-label fw-semibold text-secondary small">Email Address</label>
+                                                    <div class="input-group">
+                                                        <span class="input-group-text bg-light border-end-0"><i class="fas fa-envelope text-muted"></i></span>
+                                                        <input type="email" class="form-control border-start-0 bg-light" id="profile-email" readonly style="background-color: #f8f9fa !important; cursor: not-allowed;">
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label class="form-label fw-semibold text-secondary small">Phone Number</label>
+                                                    <div class="input-group">
+                                                        <span class="input-group-text bg-light border-end-0"><i class="fas fa-phone text-muted"></i></span>
+                                                        <input type="tel" class="form-control border-start-0" id="profile-phone" placeholder="e.g. +252 614840501" inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9+ ]/g, '')" required>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label class="form-label fw-semibold text-secondary small">Current Plan</label>
+                                                    <div class="input-group">
+                                                        <span class="input-group-text bg-light border-end-0"><i class="fas fa-box text-muted"></i></span>
+                                                        <input type="text" class="form-control border-start-0 bg-light" id="profile-plan" readonly style="background-color: #f8f9fa !important; cursor: not-allowed;">
+                                                    </div>
+                                                </div>
+                                                <div class="col-12">
+                                                    <label class="form-label fw-semibold text-secondary small">Registered Home Address</label>
+                                                    <div class="input-group">
+                                                        <span class="input-group-text bg-light border-end-0"><i class="fas fa-map-marker-alt text-muted"></i></span>
+                                                        <input type="text" class="form-control border-start-0" id="profile-address" placeholder="District, Street (House #)" required>
+                                                    </div>
+                                                    <small class="text-muted" style="font-size: 12px;"><i class="fas fa-info-circle me-1"></i> Pre-filled with your registered address. Used automatically for pickup services.</small>
+                                                </div>
+                                            </div>
+
+                                            <div class="mt-4">
+                                                <button type="submit" id="saveProfileBtn" class="btn btn-success w-100 fw-bold py-2 shadow-sm rounded-3">
+                                                    <i class="fas fa-save me-2"></i> Save Profile Details
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Security Tab -->
+                            <div class="tab-pane fade" id="security-settings" role="tabpanel">
+                                <div class="card border-0 shadow-sm">
+                                    <div class="card-body p-4">
+                                        <form id="passwordForm">
+                                            <div class="mb-3">
+                                                <label class="form-label fw-semibold">Current Password</label>
+                                                <input type="password" class="form-control" id="current-password" required>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label fw-semibold">New Password</label>
+                                                <input type="password" class="form-control" id="new-password" required minlength="6">
+                                            </div>
+                                            <div class="mb-4">
+                                                <label class="form-label fw-semibold">Confirm New Password</label>
+                                                <input type="password" class="form-control" id="confirm-password" required minlength="6">
+                                            </div>
+                                            <button type="submit" class="btn btn-primary w-100 fw-bold">Update Password</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Notifications Tab -->
+                            <div class="tab-pane fade" id="notifications-settings" role="tabpanel">
+                                <div class="card border-0 shadow-sm">
+                                    <div class="card-body p-4">
+                                        <h6 class="mb-3 fw-bold text-muted">Notification Preferences</h6>
+                                        <form id="notificationsForm">
+                                            <div class="form-check form-switch mb-3">
+                                                <input class="form-check-input" type="checkbox" id="sms-reminders" checked>
+                                                <label class="form-check-label fw-semibold" for="sms-reminders">
+                                                    SMS Reminders
+                                                    <small class="d-block text-muted">Receive SMS text messages when collection day is near.</small>
+                                                </label>
+                                            </div>
+                                            <div class="form-check form-switch mb-4">
+                                                <input class="form-check-input" type="checkbox" id="email-receipts" checked>
+                                                <label class="form-check-label fw-semibold" for="email-receipts">
+                                                    Email Receipts
+                                                    <small class="d-block text-muted">Receive payment receipts directly to your email inbox.</small>
+                                                </label>
+                                            </div>
+                                            <button type="submit" class="btn btn-success w-100 fw-bold">Save Preferences</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+        </div>
+    </div>
+
+    <!-- New Request Modal -->
+    <div class="modal fade" id="newRequestModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form id="newRequestForm">
+                    <div class="modal-header pb-4 border-bottom">
+                        <h5 class="modal-title fw-bold">Schedule Pickup</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label text-muted fw-semibold">Subscription / Service Plan</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white text-muted border-end-0"><i class="fas fa-box"></i></span>
+                                <select class="form-select border-start-0 fw-semibold text-dark" id="req-plan">
+                                    <option value="Pay Per Pickup ($5.00)">📦 Pay Per Pickup ($5/Pickup)</option>
+                                    <option value="Monthly Subscription ($15.00)">🗓️ Monthly Subscription ($15/Month)</option>
+                                    <option value="Commercial Plan ($45.00)">🏢 Commercial Plan ($45.00)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted fw-semibold">Pickup Date & Time</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light text-muted border-end-0"><i class="fas fa-calendar-alt"></i></span>
+                                <input type="datetime-local" class="form-control border-start-0 bg-light" id="req-time" readonly style="background-color: #f1f3f5 !important; cursor: not-allowed;" required>
+                            </div>
+                            <small class="text-muted" style="font-size: 12px;"><i class="fas fa-clock me-1"></i> Automatically locked to your device's current time.</small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted fw-semibold mb-1">Pickup Address (Registered Home)</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light text-muted border-end-0"><i class="fas fa-map-marker-alt"></i></span>
+                                <textarea class="form-control border-start-0 bg-light" id="req-address" rows="2" readonly style="background-color: #f1f3f5 !important; cursor: not-allowed;" required></textarea>
+                            </div>
+                            <small class="text-muted" style="font-size: 12px;"><i class="fas fa-lock me-1"></i> Automatically locked to your registered home location.</small>
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label text-muted fw-semibold">Notes (Optional)</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white text-muted border-end-0"><i class="fas fa-pen"></i></span>
+                                <textarea class="form-control border-start-0" id="req-notes" rows="2" placeholder="E.g., Large furniture, hazardous materials..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-top-0 pt-0">
+                        <button type="submit" class="btn btn-success fw-bold" style="border-radius: 8px; padding: 10px 24px;">
+                            Submit Request <i class="fas fa-paper-plane ms-2"></i>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Payment Modal -->
+    <div class="modal fade" id="paymentModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form id="paymentForm" onsubmit="handlePayNowClick(event)">
+                    <div class="modal-header border-0 pb-0">
+                        <h5 class="modal-title fw-bold">Make a Payment</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body pt-3">
+                        <div class="mb-4">
+                            <label class="form-label text-muted fw-semibold">Select Payment Method:</label>
+                            <ul class="nav nav-pills nav-fill gap-2 p-1 bg-light rounded-3" id="paymentTab" role="tablist">
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link active fw-bold border-0" id="mobile-money-tab" data-bs-toggle="tab" data-bs-target="#mobile-money" type="button" role="tab" style="border-radius: 6px;"><i class="fas fa-mobile-alt me-1"></i> EVC Plus / Sahal</button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link fw-bold border-0" id="credit-card-tab" data-bs-toggle="tab" data-bs-target="#credit-card" type="button" role="tab" style="border-radius: 6px;"><i class="fas fa-credit-card me-1"></i> Credit Card</button>
+                                </li>
+                            </ul>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label text-muted fw-semibold">Amount to Pay ($)</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light text-success border-end-0"><i class="fas fa-dollar-sign"></i></span>
+                                <input type="text" class="form-control border-start-0 fw-bold fs-5 text-success bg-light" id="pay-amount" value="5.00" readonly style="background-color: #f1f3f5 !important; cursor: not-allowed; color: #198754 !important;">
+                            </div>
+                            <small class="text-muted" style="font-size: 12px;"><i class="fas fa-lock me-1"></i> Fixed rate based on your selected pickup service plan.</small>
+                        </div>
+
+                        <div class="tab-content" id="paymentTabContent">
+                            <!-- Mobile Money Tab -->
+                            <div class="tab-pane fade show active" id="mobile-money" role="tabpanel">
+                                <div class="mb-3">
+                                    <label class="form-label text-muted fw-semibold">Enter Phone Number</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-light text-muted border-end-0"><i class="fas fa-phone-alt"></i></span>
+                                        <input type="tel" class="form-control border-start-0" id="pay-phone" placeholder="e.g. +252 61X XXX XXX" inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9+ ]/g, '')">
+                                    </div>
+                                    <small class="text-muted d-block mt-1">You will receive an exact USSD push notification.</small>
+                                </div>
+                            </div>
+                            
+                            <!-- Credit Card Tab -->
+                            <div class="tab-pane fade" id="credit-card" role="tabpanel">
+                                <div class="mb-3">
+                                    <label class="form-label text-muted fw-semibold">Card Number</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-light text-muted border-end-0"><i class="fas fa-credit-card"></i></span>
+                                        <input type="text" class="form-control border-start-0" id="pay-card" placeholder="**** **** **** ****" inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9 ]/g, '')" maxlength="19">
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <div class="mb-3">
+                                            <label class="form-label text-muted fw-semibold">Expiry Date</label>
+                                            <input type="text" class="form-control" placeholder="MM/YY" maxlength="5" inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9\/]/g, '')">
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="mb-3">
+                                            <label class="form-label text-muted fw-semibold">CVV / CVC</label>
+                                            <input type="password" class="form-control" placeholder="123" maxlength="4" inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-0 pt-0">
+                        <button type="button" class="btn btn-success w-100 fw-bold shadow-sm" style="border-radius: 8px; padding: 10px 0;" id="payBtn" onclick="handlePayNowClick(event)">
+                            <i class="fas fa-lock me-1"></i> Pay Now
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- USSD Simulation Modal (Mock EVC Plus/Sahal) -->
+    <div class="modal fade" id="ussdModal" tabindex="-1" data-bs-backdrop="static">
+        <div class="modal-dialog modal-dialog-centered modal-sm">
+            <div class="modal-content border-0" style="background-color: #111; color: #fff; border-radius: 16px; box-shadow: 0 15px 40px rgba(0,0,0,0.6); border: 1px solid #333;">
+                <div class="modal-header border-0 pb-0 justify-content-center pt-3">
+                    <span class="badge bg-warning text-dark px-3 py-1 fw-bold fs-6"><i class="fas fa-sim-card me-1"></i> EVC Plus USSD Push</span>
+                </div>
+                <div class="modal-body p-4 font-monospace text-center">
+                    <p class="mb-3 fs-6 text-light" id="ussd-text">
+                        EVC Plus: Fadlan geli PIN-kaaga si aad u bixiso <strong class="text-warning">$<span id="ussd-amount">5.00</span></strong> oo ku socota Smart Waste Management:
+                    </p>
+                    <input type="password" class="form-control bg-dark text-warning border-secondary mb-4 text-center font-monospace" id="ussd-pin" placeholder="••••" maxlength="4" inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9]/g, '')" style="letter-spacing: 12px; font-size: 24px; font-weight: bold; border-radius: 8px;">
+                    <div class="d-flex justify-content-between gap-2">
+                        <button type="button" class="btn btn-outline-light w-50 fw-bold" id="ussd-cancel" style="border-radius: 8px;">Cancel</button>
+                        <button type="button" class="btn btn-success w-50 fw-bold shadow" id="ussd-send" style="border-radius: 8px;"><i class="fas fa-check me-1"></i> Send</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Report Modal -->
+    <div class="modal fade" id="reportModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form id="reportForm">
+                    <div class="modal-header border-0 pb-0">
+                        <h5 class="modal-title fw-bold">Report an Issue</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body pt-3">
+                        <div class="mb-4">
+                            <label class="form-label text-muted fw-semibold">Select Issue Category</label>
+                            <select class="form-select border-secondary shadow-sm report-input" id="rep-category" required>
+                                <option value="" disabled selected>Select an option...</option>
+                                <option value="Delayed Pickup">🚚 Delayed Pickup</option>
+                                <option value="Payment Issue">💵 Payment Issue</option>
+                                <option value="Missed Collection">⚠️ Missed Collection</option>
+                                <option value="Other">💬 Other</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted fw-semibold">Message / Report</label>
+                            <div class="input-group shadow-sm">
+                                <span class="input-group-text bg-light text-muted border-end-0"><i class="fas fa-edit"></i></span>
+                                <textarea class="form-control border-start-0 report-input" id="rep-message" rows="4" required placeholder="Describe your issue or message here..."></textarea>
+                            </div>
+                        </div>
+                        <div class="mb-2 mt-4">
+                            <label class="form-label text-muted fw-semibold">Attachment</label>
+                            <div class="d-grid">
+                                <label for="rep-attachment" class="btn btn-outline-secondary border-dashed" style="border: 2px dashed #ccc; background-color: #f8f9fa;">
+                                    <i class="fas fa-paperclip me-2"></i> Upload Photo (Optional)
+                                </label>
+                                <input type="file" id="rep-attachment" class="d-none" accept="image/*">
+                            </div>
+                            <div id="attachment-name" class="text-success mt-1 small d-none"></div>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-0 pt-0 mt-3">
+                        <button type="submit" class="btn btn-danger w-100 fw-bold shadow-sm" style="border-radius: 8px; padding: 10px 0;">
+                            <i class="fas fa-paper-plane me-1"></i> Send Report
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toastContainer"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+    <script src="../js/api.js?v=99000060"></script>
+    <script src="app.js?v=99000060"></script>
+</body>
+</html>
+

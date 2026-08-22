@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Driver Login - Waste Collection Management System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="../css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        .inline-error-card {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background-color: #fde8e8;
+            border: 1px solid #f8b4b4;
+            color: #9b1c1c;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            margin-top: 12px;
+            margin-bottom: 4px;
+            text-align: left;
+            animation: slideDown 0.25s ease-out;
+        }
+        .error-icon {
+            flex-shrink: 0;
+            color: #e02424;
+        }
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <div class="container">
+        <div class="row justify-content-center align-items-center min-vh-100">
+            <div class="col-md-5">
+                <div class="card card-custom p-4 shadow-sm border-0">
+                    <div class="card-body">
+                        <div class="text-center mb-4">
+                            <div class="d-inline-block p-3 rounded-circle bg-success-subtle text-success mb-2">
+                                <i class="fas fa-truck-pickup fs-2"></i>
+                            </div>
+                            <h2 class="text-center text-success fw-bold mb-1">Driver Portal</h2>
+                            <p class="text-muted small mb-0">Sign in to access your assigned routes & pickup jobs</p>
+
+                            <!-- Inline Error Card (Placed directly under title) -->
+                            <div id="inlineErrorCard" class="inline-error-card d-none">
+                                <svg class="error-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                                </svg>
+                                <span id="errorMessage">Invalid email or password</span>
+                            </div>
+                        </div>
+
+                        <form id="driverLoginForm">
+                            <div class="mb-3">
+                                <label class="form-label text-secondary small fw-semibold">Email address or Phone</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light text-success border-end-0"><i class="fas fa-envelope"></i></span>
+                                    <input type="text" class="form-control border-start-0 ps-0" id="email" required value="yahye@waste.com" placeholder="yahye@waste.com or phone">
+                                </div>
+                            </div>
+                            <div class="mb-4">
+                                <label class="form-label text-secondary small fw-semibold">Password</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light text-success border-end-0"><i class="fas fa-lock"></i></span>
+                                    <input type="password" class="form-control border-start-0 ps-0" id="password" required value="password123" placeholder="••••••••">
+                                </div>
+                            </div>
+                            <button type="submit" id="loginBtn" class="btn btn-success w-100 py-2 fw-bold shadow-sm">
+                                <i class="fas fa-sign-in-alt me-2"></i>Login
+                            </button>
+                        </form>
+                        <div class="text-center mt-4 pt-2 border-top">
+                            <p class="text-muted small mb-2">Don't have a driver account? <a href="register.html" class="text-success fw-bold text-decoration-none">Register here</a></p>
+                            <a href="../index.html" class="text-decoration-none text-muted small"><i class="fas fa-arrow-left me-1"></i> Back to Home</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="../js/api.js?v=1400000"></script>
+    <script>
+        document.getElementById('driverLoginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('loginBtn');
+            const inlineCard = document.getElementById('inlineErrorCard');
+            const errorMessage = document.getElementById('errorMessage');
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
+            
+            inlineCard.classList.add('d-none');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Logging in...';
+
+            try {
+                const res = await apiCall('/auth.php?action=login', 'POST', { email, password, type: 'driver' });
+                if(res.status === 'success') {
+                    window.location.href = 'dashboard.php';
+                } else {
+                    throw new Error(res.message || 'Invalid email or password');
+                }
+            } catch (err) {
+                errorMessage.textContent = err.message || 'Invalid email or password';
+                inlineCard.classList.remove('d-none');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-sign-in-alt me-2"></i>Login';
+            }
+        });
+    </script>
+</body>
+</html>
