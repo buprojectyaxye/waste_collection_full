@@ -19,12 +19,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $method = $data['method'] ?? 'EVC Plus';
 
         try {
-            // Fetch resident's registered profile to strictly enforce registered address
+            // Fetch resident's registered profile to strictly enforce registered address and active subscription plan
             $resStmt = $conn->prepare("SELECT address, subscription_plan FROM residents WHERE resident_id = ?");
             $resStmt->execute([$resident_id]);
             $resProfile = $resStmt->fetch(PDO::FETCH_ASSOC);
             if ($resProfile && !empty($resProfile['address'])) {
                 $address = $resProfile['address']; // Automatically match registered address
+            }
+            $resPlan = $resProfile['subscription_plan'] ?? '';
+
+            $isMonthlyActive = (strpos($resPlan, '15') !== false || stripos($resPlan, 'monthly') !== false || strpos($resPlan, '45') !== false || stripos($resPlan, 'commercial') !== false);
+            $planSubmitted = $data['plan'] ?? '';
+
+            if ($isMonthlyActive && ($amount == 0 || $method === 'Monthly Subscription' || empty($planSubmitted) || strpos($planSubmitted, '15') !== false || stripos($planSubmitted, 'monthly') !== false || strpos($planSubmitted, '45') !== false || stripos($planSubmitted, 'commercial') !== false)) {
+                $amount = 0.00;
+                $method = 'Monthly Subscription';
             }
 
             if (!$address) {
@@ -54,7 +63,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $waste_type = $data['waste_type'] ?? $data['type'] ?? 'General Waste';
             
-            // 1-to-1 Direct Dispatch to Dedicated District Driver
             $districts = ['Wadajir', 'Hodan', 'Waberi', 'Deyniile', 'Karaan', 'Hamarweyne', 'Howlwadaag', 'Kaxda', 'Shangani', 'Shibis', 'Bondhere', 'Abdiaziz', 'Dharkenley', 'Garasbaley', 'Yaqshid', 'Huriwa', 'Warta Nabada', 'Hamar Jajab'];
             $matchedDistrict = null;
             foreach ($districts as $d) {
@@ -64,46 +72,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
 
-            // Find the 1 assigned driver for this specific district
+            // Search for driver matching matchedDistrict zone first, or any active approved driver
+            $matchedArea = $matchedDistrict ?: 'Mogadishu';
             $assignedDriver = null;
+            
             if ($matchedDistrict) {
-                $drvStmt = $conn->prepare("
-                    SELECT driver_id, name, vehicle_plate, zone 
-                    FROM drivers 
-                    WHERE (LOWER(zone) = LOWER(?) OR zone LIKE ?) 
-                      AND approval_status = 'Approved' 
-                    ORDER BY driver_id ASC
-                    LIMIT 1
-                ");
-                $drvStmt->execute([$matchedDistrict, "%$matchedDistrict%"]);
+                $drvStmt = $conn->prepare("SELECT driver_id, name FROM drivers WHERE approval_status = 'Approved' AND (zone LIKE ? OR zone = ?) ORDER BY driver_id ASC LIMIT 1");
+                $drvStmt->execute(["%$matchedDistrict%", $matchedDistrict]);
+                $assignedDriver = $drvStmt->fetch(PDO::FETCH_ASSOC);
+            }
+            if (!$assignedDriver) {
+                // Fallback to any active approved driver
+                $drvStmt = $conn->query("SELECT driver_id, name FROM drivers WHERE approval_status = 'Approved' AND status IN ('On Duty', 'Online') ORDER BY driver_id ASC LIMIT 1");
+                $assignedDriver = $drvStmt->fetch(PDO::FETCH_ASSOC);
+            }
+            if (!$assignedDriver) {
+                // Fallback to any approved driver
+                $drvStmt = $conn->query("SELECT driver_id, name FROM drivers WHERE approval_status = 'Approved' ORDER BY driver_id ASC LIMIT 1");
                 $assignedDriver = $drvStmt->fetch(PDO::FETCH_ASSOC);
             }
 
+            $driver_id_to_assign = $assignedDriver ? $assignedDriver['driver_id'] : null;
+            $initial_status = $assignedDriver ? 'Assigned' : 'Pending';
+
+            // Create new request as Assigned (or Pending if no driver available)
+            $stmt = $conn->prepare("INSERT INTO waste_requests (resident_id, driver_id, request_time, address, area, waste_type, status, payment_status) VALUES (?, ?, ?, ?, ?, ?, ?, 'Paid')");
+            $stmt->execute([$resident_id, $driver_id_to_assign, $request_time, $address, $matchedArea, $waste_type, $initial_status]);
+            $request_id = $conn->lastInsertId();
+
             if ($assignedDriver) {
-                // Directly assign to the 1 dedicated district driver
-                $assignedDriverId = $assignedDriver['driver_id'];
-                $initialStatus = 'Assigned';
-                $stmt = $conn->prepare("INSERT INTO waste_requests (resident_id, driver_id, request_time, address, area, waste_type, status, payment_status) VALUES (?, ?, ?, ?, ?, ?, 'Assigned', 'Paid')");
-                $stmt->execute([$resident_id, $assignedDriverId, $request_time, $address, $matchedDistrict ?: 'Mogadishu', $waste_type]);
-                $request_id = $conn->lastInsertId();
+                // Insert into assignments table
+                $assStmt = $conn->prepare("INSERT INTO assignments (request_id, driver_id, status, assigned_time) VALUES (?, ?, 'Assigned', NOW())");
+                $assStmt->execute([$request_id, $driver_id_to_assign]);
 
-                // Create assignment record
+                // Notify driver
                 try {
-                    $conn->prepare("INSERT INTO assignments (request_id, driver_id, status, assigned_time) VALUES (?, ?, 'Assigned', NOW())")
-                         ->execute([$request_id, $assignedDriverId]);
-                } catch (Exception $exAss) {}
-
-                // Send notification ONLY to this single assigned driver
-                try {
-                    $drvMsg = "New pickup request #{$request_id} from {$matchedDistrict} resident assigned to you! Open your dashboard to view & collect.";
-                    $conn->prepare("INSERT INTO notifications (user_type, user_id, title, message) VALUES ('Driver', ?, 'New Job Assigned to You', ?)")
-                         ->execute([$assignedDriverId, $drvMsg]);
-                } catch (Exception $exNotif) {}
-            } else {
-                // Unassigned pending request if district driver not yet onboarded
-                $stmt = $conn->prepare("INSERT INTO waste_requests (resident_id, driver_id, request_time, address, area, waste_type, status, payment_status) VALUES (?, NULL, ?, ?, ?, ?, 'Pending', 'Paid')");
-                $stmt->execute([$resident_id, $request_time, $address, $matchedDistrict ?: 'Mogadishu', $waste_type]);
-                $request_id = $conn->lastInsertId();
+                    $notifDrv = $conn->prepare("INSERT INTO notifications (user_type, user_id, title, message) VALUES ('Driver', ?, 'New Pickup Assigned', ?)");
+                    $notifDrv->execute([$driver_id_to_assign, "New pickup request #$request_id in $matchedArea has been assigned to you."]);
+                } catch (Exception $exN) {}
             }
 
             // Insert Completed payment record
@@ -112,17 +118,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // Update active subscription plan if new plan submitted
             try {
-                $planSubmitted = $data['plan'] ?? '';
-                $resPlan = $resProfile['subscription_plan'] ?? '';
                 $activePlanStr = $planSubmitted ?: $resPlan;
                 $savePlanName = '';
 
                 if (strpos($activePlanStr, '45') !== false || stripos($activePlanStr, 'commercial') !== false) {
                     $savePlanName = 'Commercial Plan ($45.00)';
-                } elseif (strpos($activePlanStr, '5') !== false || stripos($activePlanStr, 'pickup') !== false) {
-                    $savePlanName = 'Pay Per Pickup ($5.00)';
                 } elseif (strpos($activePlanStr, '15') !== false || stripos($activePlanStr, 'monthly') !== false) {
                     $savePlanName = 'Monthly Subscription ($15.00)';
+                } elseif (strpos($activePlanStr, '5') !== false || stripos($activePlanStr, 'pickup') !== false) {
+                    $savePlanName = 'Pay Per Pickup ($5.00)';
                 }
 
                 if ($savePlanName && $savePlanName !== $resPlan) {
@@ -133,10 +137,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // Add log
             try {
-                $distLabel = $matchedDistrict ?: 'Mogadishu';
-                $logMsg = $assignedDriver 
-                    ? "Pickup request scheduled and paid ($" . number_format($amount, 2) . " via $method). Assigned directly to driver {$assignedDriver['name']} in $distLabel zone."
-                    : "Pickup request scheduled and paid ($" . number_format($amount, 2) . " via $method). Pending driver assignment for $distLabel zone.";
+                if ($amount == 0 || $method === 'Monthly Subscription') {
+                    $logMsg = $assignedDriver ? "Pickup request scheduled under active Monthly Subscription ($0.00) and automatically assigned to driver " . $assignedDriver['name'] . " ($matchedArea zone)." : "Pickup request scheduled under active Monthly Subscription ($0.00). Pending driver assignment.";
+                } else if ($assignedDriver) {
+                    $logMsg = "Pickup request scheduled, paid ($" . number_format($amount, 2) . " via $method), and automatically assigned to driver " . $assignedDriver['name'] . " ($matchedArea zone).";
+                } else {
+                    $logMsg = "Pickup request scheduled and paid ($" . number_format($amount, 2) . " via $method). Pending driver assignment by administrator.";
+                }
                 $stmtLog = $conn->prepare("INSERT INTO request_logs (request_id, action, message) VALUES (?, 'Created', ?)");
                 $stmtLog->execute([$request_id, $logMsg]);
             } catch (Exception $exLog) {}
@@ -151,7 +158,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             sendResponse('success', 'Request created and assigned to zone driver successfully', [
                 'request_id' => $request_id,
                 'status' => $assignedDriver ? 'Assigned' : 'Pending',
-                'zone' => $matchedDistrict ?: 'Mogadishu',
+                'zone' => $matchedArea,
                 'assigned_driver' => $assignedDriver ? $assignedDriver['name'] : null
             ]);
         } catch (PDOException $e) {
@@ -282,7 +289,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute([$resident_id]);
             $resident = $stmt->fetch();
 
-            if (!$resident || !password_verify($current_password, $resident['password'])) {
+            $isValid = false;
+            if ($resident && !empty($resident['password'])) {
+                if (password_verify($current_password, $resident['password'])) {
+                    $isValid = true;
+                } elseif ($current_password === $resident['password']) {
+                    $isValid = true;
+                }
+            }
+
+            if (!$isValid) {
                 sendResponse('error', 'Incorrect current password', null, 400);
             }
 

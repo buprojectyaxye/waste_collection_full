@@ -47,7 +47,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute([$_SESSION['user_id']]);
             $admin = $stmt->fetch();
             
-            if (!$admin || !password_verify($current, $admin['password'])) {
+            $isValid = false;
+            if ($admin && !empty($admin['password'])) {
+                if (password_verify($current, $admin['password'])) {
+                    $isValid = true;
+                } elseif ($current === $admin['password']) {
+                    $isValid = true;
+                }
+            }
+            
+            if (!$isValid) {
                 sendResponse('error', 'Current password is incorrect', null, 400);
             }
             
@@ -177,22 +186,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!$zone) $zone = $trk['assigned_zone'];
             }
 
-            if (!$vehicle_info) $vehicle_info = "Pickup Truck ($truck_plate)";
-            if (!$zone) $zone = 'Wadajir';
+            $earning_per_pickup = floatval($data['earning_per_pickup'] ?? $data['rate_per_pickup'] ?? $data['pickup_rate'] ?? 1.50);
+            if ($earning_per_pickup < 0.50) $earning_per_pickup = 0.50;
+            if ($earning_per_pickup > 5.00) $earning_per_pickup = 5.00;
 
             $hashed = password_hash($password, PASSWORD_DEFAULT);
             $stmt = $conn->prepare("
-                INSERT INTO drivers (name, email, phone, zone, license_number, emergency_contact, vehicle_plate, vehicle_info, status, approval_status, password) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'On Duty', 'Approved', ?)
+                INSERT INTO drivers (name, email, phone, zone, license_number, emergency_contact, vehicle_plate, vehicle_info, earning_per_pickup, status, approval_status, password) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'On Duty', 'Approved', ?)
             ");
-            $stmt->execute([$name, $email, $phone, $zone, $license_number, $emergency_contact, $truck_plate, $vehicle_info, $hashed]);
+            $stmt->execute([$name, $email, $phone, $zone, $license_number, $emergency_contact, $truck_plate, $vehicle_info, $earning_per_pickup, $hashed]);
             $newDriverId = $conn->lastInsertId();
 
             // Link fleet truck if present in trucks table
             $upTrk = $conn->prepare("UPDATE trucks SET current_driver_id = ?, status = 'Assigned' WHERE plate_number = ?");
             $upTrk->execute([$newDriverId, $truck_plate]);
 
-            sendResponse('success', 'Driver registered and vehicle plate assigned successfully!', ['driver_id' => $newDriverId, 'vehicle_plate' => $truck_plate]);
+            sendResponse('success', 'Driver registered and vehicle plate assigned successfully!', ['driver_id' => $newDriverId, 'vehicle_plate' => $truck_plate, 'earning_per_pickup' => $earning_per_pickup]);
         } catch (PDOException $e) {
             sendResponse('error', 'Database error: ' . $e->getMessage(), null, 500);
         }
@@ -223,14 +233,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $phone = $data['phone'] ?? '';
         $zone = $data['zone'] ?? '';
         $vehicle_info = $data['vehicle_info'] ?? '';
+        $earning_per_pickup = isset($data['earning_per_pickup']) ? floatval($data['earning_per_pickup']) : (isset($data['rate_per_pickup']) ? floatval($data['rate_per_pickup']) : null);
+        if ($earning_per_pickup !== null) {
+            if ($earning_per_pickup < 0.50) $earning_per_pickup = 0.50;
+            if ($earning_per_pickup > 5.00) $earning_per_pickup = 5.00;
+        }
 
         if (!$driver_id || !$name) {
             sendResponse('error', 'Required fields missing', null, 400);
         }
 
         try {
-            $stmt = $conn->prepare("UPDATE drivers SET name = ?, phone = ?, zone = ? WHERE driver_id = ?");
-            $stmt->execute([$name, $phone, $zone, $driver_id]);
+            if ($earning_per_pickup !== null) {
+                $stmt = $conn->prepare("UPDATE drivers SET name = ?, phone = ?, zone = ?, earning_per_pickup = ? WHERE driver_id = ?");
+                $stmt->execute([$name, $phone, $zone, $earning_per_pickup, $driver_id]);
+            } else {
+                $stmt = $conn->prepare("UPDATE drivers SET name = ?, phone = ?, zone = ? WHERE driver_id = ?");
+                $stmt->execute([$name, $phone, $zone, $driver_id]);
+            }
             sendResponse('success', 'Driver updated successfully');
         } catch (PDOException $e) {
             sendResponse('error', 'Database error: ' . $e->getMessage(), null, 500);
@@ -261,6 +281,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $vehicle_plate = trim($data['vehicle_plate'] ?? '');
         $vehicle_info = trim($data['vehicle_info'] ?? 'Compact Dump Truck');
         $zone = trim($data['zone'] ?? 'Wadajir');
+        $earning_per_pickup = floatval($data['earning_per_pickup'] ?? $data['rate_per_pickup'] ?? 1.50);
+        if ($earning_per_pickup < 0.50) $earning_per_pickup = 0.50;
+        if ($earning_per_pickup > 5.00) $earning_per_pickup = 5.00;
 
         if (!$driver_id || empty($vehicle_plate)) {
             sendResponse('error', 'Driver ID and Assigned Vehicle License Plate Number are required to approve the driver.', null, 400);
@@ -274,10 +297,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     vehicle_plate = ?, 
                     vehicle_info = ?, 
                     zone = ?,
+                    earning_per_pickup = ?,
                     rejection_reason = NULL
                 WHERE driver_id = ?
             ");
-            $stmt->execute([$vehicle_plate, $vehicle_info, $zone, $driver_id]);
+            $stmt->execute([$vehicle_plate, $vehicle_info, $zone, $earning_per_pickup, $driver_id]);
 
             // Notify Driver
             try {
@@ -397,7 +421,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             $drvName = $drvInfo['name'] ?? 'Driver';
             $stmt3 = $conn->prepare("INSERT INTO request_logs (request_id, action, message) VALUES (?, 'Assigned', ?)");
-            $stmt3->execute([$request_id, "Admin assigned driver $drvName"]);
+            $stmt3->execute([$request_id, "Assigned to driver $drvName by administrator."]);
+
+            // Send notification to the newly assigned driver
+            try {
+                $drvMsg = "New pickup request #{$request_id} assigned to you by Admin! Open your dashboard to view & collect.";
+                $conn->prepare("INSERT INTO notifications (user_type, user_id, title, message) VALUES ('Driver', ?, 'New Job Assigned to You', ?)")
+                     ->execute([$driver_id, $drvMsg]);
+            } catch (Exception $exNotif) {}
 
             $conn->commit();
             sendResponse('success', 'Driver assigned successfully');
@@ -542,12 +573,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stats['total_drivers'] = $conn->query("SELECT COUNT(*) FROM drivers")->fetchColumn();
             $stats['total_residents'] = $conn->query("SELECT COUNT(*) FROM residents")->fetchColumn();
             
-            // Payment stats - strictly Completed
-            $stats['total_payments'] = $conn->query("SELECT COUNT(*) FROM payments WHERE status = 'Completed'")->fetchColumn();
+            // Payment stats - strictly Completed for registered residents
+            $stats['total_payments'] = (int)$conn->query("SELECT COUNT(*) FROM payments p INNER JOIN residents r ON p.resident_id = r.resident_id WHERE p.status = 'Completed'")->fetchColumn();
             
-            $rev = $conn->query("SELECT SUM(amount) FROM payments WHERE status = 'Completed' AND (paid_at >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY) OR MONTH(paid_at) = MONTH(CURRENT_DATE()))")->fetchColumn();
+            $rev = $conn->query("SELECT SUM(p.amount) FROM payments p INNER JOIN residents r ON p.resident_id = r.resident_id WHERE p.status = 'Completed' AND (p.paid_at >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY) OR MONTH(p.paid_at) = MONTH(CURRENT_DATE()))")->fetchColumn();
             if (!$rev || (float)$rev == 0) {
-                $rev = $conn->query("SELECT SUM(amount) FROM payments WHERE status = 'Completed'")->fetchColumn();
+                $rev = $conn->query("SELECT SUM(p.amount) FROM payments p INNER JOIN residents r ON p.resident_id = r.resident_id WHERE p.status = 'Completed'")->fetchColumn();
             }
             $stats['monthly_revenue'] = $rev ? (float)$rev : 0;
             
@@ -564,22 +595,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $dateCond = "";
             $dateCondRev = "";
             if ($filter === 'this_month') {
-                $dateCond = " WHERE MONTH(created_at) = MONTH(CURRENT_DATE()) AND YEAR(created_at) = YEAR(CURRENT_DATE())";
-                $dateCondRev = " AND MONTH(paid_at) = MONTH(CURRENT_DATE()) AND YEAR(paid_at) = YEAR(CURRENT_DATE())";
+                $dateCond = " WHERE MONTH(p.created_at) = MONTH(CURRENT_DATE()) AND YEAR(p.created_at) = YEAR(CURRENT_DATE())";
+                $dateCondRev = " AND MONTH(p.paid_at) = MONTH(CURRENT_DATE()) AND YEAR(p.paid_at) = YEAR(CURRENT_DATE())";
             } elseif ($filter === '7days') {
-                $dateCond = " WHERE created_at >= DATE_SUB(CURRENT_DATE(), INTERVAL 7 DAY)";
-                $dateCondRev = " AND paid_at >= DATE_SUB(CURRENT_DATE(), INTERVAL 7 DAY)";
+                $dateCond = " WHERE p.created_at >= DATE_SUB(CURRENT_DATE(), INTERVAL 7 DAY)";
+                $dateCondRev = " AND p.paid_at >= DATE_SUB(CURRENT_DATE(), INTERVAL 7 DAY)";
             } else {
-                $dateCond = " WHERE created_at >= DATE_SUB(CURRENT_DATE(), INTERVAL 6 MONTH)";
-                $dateCondRev = " AND paid_at >= DATE_SUB(CURRENT_DATE(), INTERVAL 6 MONTH)";
+                $dateCond = " WHERE p.created_at >= DATE_SUB(CURRENT_DATE(), INTERVAL 6 MONTH)";
+                $dateCondRev = " AND p.paid_at >= DATE_SUB(CURRENT_DATE(), INTERVAL 6 MONTH)";
             }
 
             $stats = [];
-            $stats['total_payments'] = $conn->query("SELECT COUNT(*) FROM payments WHERE status = 'Completed'" . str_replace("WHERE", "AND", $dateCond))->fetchColumn();
-            $rev = $conn->query("SELECT SUM(amount) FROM payments WHERE status = 'Completed'" . $dateCondRev)->fetchColumn();
+            $stats['total_payments'] = (int)$conn->query("SELECT COUNT(*) FROM payments p INNER JOIN residents r ON p.resident_id = r.resident_id WHERE p.status = 'Completed'" . str_replace("WHERE", "AND", $dateCond))->fetchColumn();
+            $rev = $conn->query("SELECT SUM(p.amount) FROM payments p INNER JOIN residents r ON p.resident_id = r.resident_id WHERE p.status = 'Completed'" . $dateCondRev)->fetchColumn();
             $stats['monthly_revenue'] = $rev ? (float)$rev : 0;
-            $stats['pending_payments'] = 0;
-            $stats['failed_payments'] = 0;
+            $stats['pending_payments'] = (int)$conn->query("SELECT COUNT(*) FROM payments p INNER JOIN residents r ON p.resident_id = r.resident_id WHERE p.status = 'Pending'" . str_replace("WHERE", "AND", $dateCond))->fetchColumn();
+            $stats['failed_payments'] = (int)$conn->query("SELECT COUNT(*) FROM payments p INNER JOIN residents r ON p.resident_id = r.resident_id WHERE p.status = 'Failed'" . str_replace("WHERE", "AND", $dateCond))->fetchColumn();
             sendResponse('success', 'Stats fetched', $stats);
         } catch (PDOException $e) {
             sendResponse('error', 'Database error: ' . $e->getMessage(), null, 500);
@@ -627,7 +658,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 for ($i = 6; $i >= 0; $i--) {
                     $day = date('Y-m-d', strtotime("-$i days"));
                     $dayLabel = date('D', strtotime("-$i days"));
-                    $stmt = $conn->prepare("SELECT SUM(amount) FROM payments WHERE status = 'Completed' AND DATE(paid_at) = ?");
+                    $stmt = $conn->prepare("SELECT SUM(p.amount) FROM payments p INNER JOIN residents r ON p.resident_id = r.resident_id WHERE p.status = 'Completed' AND DATE(p.paid_at) = ?");
                     $stmt->execute([$day]);
                     $rev = $stmt->fetchColumn();
                     $revenueData[] = $rev ? (float)$rev : 0;
@@ -650,7 +681,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 foreach ($ranges as $r) {
-                    $stmt = $conn->prepare("SELECT SUM(amount) FROM payments WHERE status = 'Completed' AND DATE(paid_at) BETWEEN ? AND ?");
+                    $stmt = $conn->prepare("SELECT SUM(p.amount) FROM payments p INNER JOIN residents r ON p.resident_id = r.resident_id WHERE p.status = 'Completed' AND DATE(p.paid_at) BETWEEN ? AND ?");
                     $stmt->execute([$r['start'], $r['end']]);
                     $rev = $stmt->fetchColumn();
                     $revenueData[] = $rev ? (float)$rev : 0;
@@ -660,7 +691,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 for ($i = 5; $i >= 0; $i--) {
                     $monthStr = date('Y-m', strtotime("-$i months"));
                     $monthLabel = date('M', strtotime("-$i months"));
-                    $stmt = $conn->prepare("SELECT SUM(amount) FROM payments WHERE status = 'Completed' AND DATE_FORMAT(paid_at, '%Y-%m') = ?");
+                    $stmt = $conn->prepare("SELECT SUM(p.amount) FROM payments p INNER JOIN residents r ON p.resident_id = r.resident_id WHERE p.status = 'Completed' AND DATE_FORMAT(p.paid_at, '%Y-%m') = ?");
                     $stmt->execute([$monthStr]);
                     $rev = $stmt->fetchColumn();
                     $revenueData[] = $rev ? (float)$rev : 0;
@@ -668,7 +699,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
 
-            $paymentPie = [(int)$conn->query("SELECT COUNT(*) FROM payments WHERE status = 'Completed'")->fetchColumn(), 0, 0];
+            $paymentPie = [(int)$conn->query("SELECT COUNT(*) FROM payments p INNER JOIN residents r ON p.resident_id = r.resident_id WHERE p.status = 'Completed'")->fetchColumn(), 0, 0];
 
             sendResponse('success', 'Charts', [
                 'bar' => $barData,
@@ -685,22 +716,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
     elseif ($action === 'export_financial_report') {
-        header('Content-Type: application/vnd.ms-excel');
-        header('Content-Disposition: attachment; filename=financial_report.xls');
-        echo '<table border="1">';
-        echo '<tr><th style="background-color:#4CAF50;color:white;">Transaction ID</th><th style="background-color:#4CAF50;color:white;width:150px;">Resident Name</th><th style="background-color:#4CAF50;color:white;width:120px;">Date</th><th style="background-color:#4CAF50;color:white;">Amount</th><th style="background-color:#4CAF50;color:white;">Method</th><th style="background-color:#4CAF50;color:white;">Status</th></tr>';
+        header('Content-Type: application/vnd.ms-excel; charset=UTF-8');
+        header('Content-Disposition: attachment; filename=SmartWaste_Financial_Report_' . date('Y-m-d') . '.xls');
+        
+        echo '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
+        echo '<head><meta http-equiv="content-type" content="text/plain; charset=UTF-8"/>';
+        echo '<!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Financial Report</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->';
+        echo '<style>';
+        echo 'body { font-family: "Segoe UI", Arial, sans-serif; margin: 0; padding: 0; }';
+        echo 'table { border-collapse: collapse; width: 100%; }';
+        echo '.title-banner { background-color: #1b5e20; color: #ffffff; font-size: 16px; font-weight: bold; text-align: center; padding: 14px; }';
+        echo '.th-header { background-color: #1b5e20; color: #ffffff; font-size: 13px; font-weight: bold; text-align: center; padding: 12px; border: 1px solid #144718; }';
+        echo '.td-cell { font-size: 12px; padding: 10px 12px; border: 1px solid #e0e0e0; vertical-align: middle; }';
+        echo '.row-even { background-color: #ffffff; }';
+        echo '.row-odd { background-color: #f4fbf7; }';
+        echo '.badge-success { background-color: #d4edda; color: #155724; font-weight: bold; text-align: center; border-radius: 4px; padding: 4px 8px; }';
+        echo '.badge-pending { background-color: #fff3cd; color: #856404; font-weight: bold; text-align: center; border-radius: 4px; padding: 4px 8px; }';
+        echo '</style></head><body>';
+        
+        echo '<div class="title-banner">SMART WASTE COLLECTION MANAGEMENT SYSTEM &mdash; FINANCIAL REPORT</div>';
+        echo '<table border="1" cellpadding="0" cellspacing="0">';
+        echo '<thead><tr>';
+        echo '<th class="th-header" style="width: 120px;">Transaction ID</th>';
+        echo '<th class="th-header" style="width: 200px;">Resident Name</th>';
+        echo '<th class="th-header" style="width: 140px;">Date</th>';
+        echo '<th class="th-header" style="width: 130px;">Amount ($)</th>';
+        echo '<th class="th-header" style="width: 140px;">Method</th>';
+        echo '<th class="th-header" style="width: 140px;">Status</th>';
+        echo '</tr></thead><tbody>';
         
         $stmt = $conn->query("
-            SELECT p.payment_id, r.name, DATE_FORMAT(p.paid_at, '%d %b %Y') as paid_at, p.amount, 'EVC Plus' as payment_method, p.status 
+            SELECT p.payment_id, r.name, DATE_FORMAT(p.paid_at, '%d %b %Y %h:%i %p') as paid_at, p.amount, 'EVC Plus' as payment_method, p.status 
             FROM payments p 
-            LEFT JOIN residents r ON p.resident_id = r.resident_id 
+            INNER JOIN residents r ON p.resident_id = r.resident_id 
             ORDER BY p.paid_at DESC
         ");
         $totalCollected = 0;
         $totalPending = 0;
+        $idx = 0;
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-            $name = htmlspecialchars(ucwords(strtolower(trim($row['name']))));
-            $id = htmlspecialchars($row['payment_id']);
+            $name = htmlspecialchars(ucwords(strtolower(trim($row['name'] ?: 'Resident'))));
+            $id = '#' . htmlspecialchars($row['payment_id']);
             $date = htmlspecialchars($row['paid_at']);
             $amtVal = floatval($row['amount']);
             if ($row['status'] === 'Completed' || $row['status'] === 'Success') {
@@ -708,14 +764,94 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else if ($row['status'] === 'Pending') {
                 $totalPending += $amtVal;
             }
-            $amt = htmlspecialchars($row['amount']);
+            $amt = number_format($amtVal, 2);
             $method = htmlspecialchars($row['payment_method']);
             $status = htmlspecialchars($row['status']);
-            echo "<tr><td>{$id}</td><td style='white-space:nowrap;'>{$name}</td><td style='white-space:nowrap;'>{$date}</td><td>\${$amt}</td><td>{$method}</td><td>{$status}</td></tr>";
+            $rowClass = ($idx % 2 === 0) ? 'row-even' : 'row-odd';
+            $badgeClass = ($status === 'Completed' || $status === 'Success') ? 'badge-success' : 'badge-pending';
+            
+            echo "<tr class='{$rowClass}'>";
+            echo "<td class='td-cell' style='text-align:center;font-weight:bold;color:#1b5e20;'>{$id}</td>";
+            echo "<td class='td-cell'>{$name}</td>";
+            echo "<td class='td-cell' style='text-align:center;'>{$date}</td>";
+            echo "<td class='td-cell' style='text-align:right;font-weight:bold;color:#2e7d32;'>\${$amt}</td>";
+            echo "<td class='td-cell' style='text-align:center;'>{$method}</td>";
+            echo "<td class='td-cell' style='text-align:center;'><span class='{$badgeClass}'>{$status}</span></td>";
+            echo "</tr>";
+            $idx++;
         }
-        echo "<tr><td colspan='5' style='text-align:right;font-weight:bold;'>Total Pending (Unpaid):</td><td style='font-weight:bold;color:orange;'>\${$totalPending}</td></tr>";
-        echo "<tr><td colspan='5' style='text-align:right;font-weight:bold;'>Total Revenue Collected (Lacagta Soo Xarootay):</td><td style='font-weight:bold;color:green;'>\${$totalCollected}</td></tr>";
-        echo '</table>';
+        
+        echo '<tr style="background-color:#e8f5e9;font-weight:bold;">';
+        echo '<td colspan="3" class="td-cell" style="text-align:right;color:#1b5e20;">Total Pending (Unpaid):</td>';
+        echo '<td class="td-cell" style="text-align:right;color:#d97706;">$' . number_format($totalPending, 2) . '</td>';
+        echo '<td colspan="2" class="td-cell"></td>';
+        echo '</tr>';
+        
+        echo '<tr style="background-color:#e8f5e9;font-weight:bold;">';
+        echo '<td colspan="3" class="td-cell" style="text-align:right;color:#1b5e20;">Total Revenue Collected:</td>';
+        echo '<td class="td-cell" style="text-align:right;color:#1b5e20;font-size:14px;">$' . number_format($totalCollected, 2) . '</td>';
+        echo '<td colspan="2" class="td-cell"></td>';
+        echo '</tr>';
+        echo '</tbody></table>';
+
+        echo '<br><br>';
+        echo '<div class="title-banner" style="background-color:#2e7d32;">DRIVER PICKUP COMMISSIONS & EARNINGS BREAKDOWN</div>';
+        echo '<table border="1" cellpadding="0" cellspacing="0">';
+        echo '<thead><tr>';
+        echo '<th class="th-header" style="width: 80px;">Driver ID</th>';
+        echo '<th class="th-header" style="width: 180px;">Driver Name</th>';
+        echo '<th class="th-header" style="width: 140px;">District / Zone</th>';
+        echo '<th class="th-header" style="width: 130px;">Vehicle Plate</th>';
+        echo '<th class="th-header" style="width: 130px;">Rate / Pickup ($)</th>';
+        echo '<th class="th-header" style="width: 130px;">Completed Pickups</th>';
+        echo '<th class="th-header" style="width: 140px;">Total Earnings ($)</th>';
+        echo '</tr></thead><tbody>';
+
+        $drvStmt = $conn->query("
+            SELECT d.driver_id, d.name, d.zone, d.vehicle_plate, 
+                   COALESCE(d.earning_per_pickup, 1.50) as earning_per_pickup,
+                   COALESCE(COUNT(DISTINCT CASE WHEN r.status = 'Completed' THEN r.request_id END), 0) as completed_pickups,
+                   COALESCE(COUNT(DISTINCT CASE WHEN r.status = 'Completed' THEN r.request_id END) * COALESCE(d.earning_per_pickup, 1.50), 0) as total_earnings
+            FROM drivers d
+            LEFT JOIN waste_requests r ON d.driver_id = r.driver_id
+            GROUP BY d.driver_id
+            ORDER BY total_earnings DESC
+        ");
+
+        $totalDriverEarningsSum = 0;
+        $totalPickupsSum = 0;
+        $dIdx = 0;
+        while ($dRow = $drvStmt->fetch(PDO::FETCH_ASSOC)) {
+            $dName = htmlspecialchars(ucwords(strtolower(trim($dRow['name'] ?: 'Driver'))));
+            $dId = '#' . htmlspecialchars($dRow['driver_id']);
+            $dZone = htmlspecialchars($dRow['zone'] ?: 'Unassigned');
+            $dPlate = htmlspecialchars($dRow['vehicle_plate'] ?: 'N/A');
+            $dRate = number_format(floatval($dRow['earning_per_pickup']), 2);
+            $dPickups = intval($dRow['completed_pickups']);
+            $dEarnings = floatval($dRow['total_earnings']);
+            $totalDriverEarningsSum += $dEarnings;
+            $totalPickupsSum += $dPickups;
+            $dRowClass = ($dIdx % 2 === 0) ? 'row-even' : 'row-odd';
+
+            echo "<tr class='{$dRowClass}'>";
+            echo "<td class='td-cell' style='text-align:center;font-weight:bold;color:#1b5e20;'>{$dId}</td>";
+            echo "<td class='td-cell'>{$dName}</td>";
+            echo "<td class='td-cell' style='text-align:center;'>{$dZone}</td>";
+            echo "<td class='td-cell' style='text-align:center;'>{$dPlate}</td>";
+            echo "<td class='td-cell' style='text-align:right;font-weight:bold;color:#2e7d32;'>\${$dRate}</td>";
+            echo "<td class='td-cell' style='text-align:center;'>{$dPickups}</td>";
+            echo "<td class='td-cell' style='text-align:right;font-weight:bold;color:#1b5e20;'>\$" . number_format($dEarnings, 2) . "</td>";
+            echo "</tr>";
+            $dIdx++;
+        }
+
+        echo '<tr style="background-color:#e8f5e9;font-weight:bold;">';
+        echo '<td colspan="5" class="td-cell" style="text-align:right;color:#1b5e20;">Total Completed Pickups & Driver Earnings Paid:</td>';
+        echo '<td class="td-cell" style="text-align:center;">' . $totalPickupsSum . '</td>';
+        echo '<td class="td-cell" style="text-align:right;color:#1b5e20;font-size:14px;">$' . number_format($totalDriverEarningsSum, 2) . '</td>';
+        echo '</tr>';
+
+        echo '</tbody></table></body></html>';
         exit();
     }
     elseif ($action === 'get_dashboard_activities') {
@@ -735,9 +871,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $activities = array_merge($activities, $stmt->fetchAll());
 
             $stmt = $conn->query("
-                SELECT 'payment' as type, COALESCE(paid_at, created_at) as time, CONCAT('Payment of $', amount, ' received') as description
-                FROM payments
-                WHERE status = 'Completed' OR status = 'Success'
+                SELECT 'payment' as type, COALESCE(p.paid_at, p.created_at) as time, CONCAT('Payment of $', p.amount, ' received from ', r.name) as description
+                FROM payments p
+                INNER JOIN residents r ON p.resident_id = r.resident_id
+                WHERE p.status = 'Completed' OR p.status = 'Success'
                 ORDER BY time DESC LIMIT 5
             ");
             $activities = array_merge($activities, $stmt->fetchAll());
@@ -786,7 +923,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt2 = $conn->query("
                 SELECT p.payment_id, p.amount, p.status, p.created_at, r.name AS resident_name
                 FROM payments p
-                LEFT JOIN residents r ON p.resident_id = r.resident_id
+                INNER JOIN residents r ON p.resident_id = r.resident_id
                 WHERE p.status = 'Completed' OR p.status = 'Success'
                 ORDER BY p.created_at DESC LIMIT 10
             ");
@@ -839,6 +976,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                        COALESCE(d.vehicle_plate, d2.vehicle_plate, '') as vehicle_plate,
                        r.status
                 FROM waste_requests r
+                INNER JOIN residents res ON r.resident_id = res.resident_id
                 LEFT JOIN drivers d ON r.driver_id = d.driver_id
                 LEFT JOIN (
                     SELECT request_id, MAX(assignment_id) as max_id 
@@ -862,7 +1000,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $stmt = $conn->query("
                 SELECT r.*, 
-                       COALESCE(res.name, CONCAT('Resident #', r.resident_id)) as resident_name, 
+                       res.name as resident_name, 
                        COALESCE(res.phone, 'N/A') as resident_phone, 
                        COALESCE(d.name, d2.name, 'Unassigned') as driver_name,
                        COALESCE(d.vehicle_plate, d2.vehicle_plate, '') as vehicle_plate,
@@ -878,7 +1016,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                            ELSE 'Unpaid'
                        END as payment_status
                 FROM waste_requests r 
-                LEFT JOIN residents res ON r.resident_id = res.resident_id 
+                INNER JOIN residents res ON r.resident_id = res.resident_id 
                 LEFT JOIN drivers d ON r.driver_id = d.driver_id
                 LEFT JOIN (
                     SELECT request_id, MAX(assignment_id) as max_id 
@@ -1044,20 +1182,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             sendResponse('error', 'Database error: ' . $e->getMessage(), null, 500);
         }
     }
-    elseif ($action === 'get_drivers') {
+    elseif ($action === 'get_drivers' || $action === 'get_driver_earnings') {
         try {
             $stmt = $conn->query("
-                SELECT driver_id, name, email, phone, zone, status, approval_status, 
-                       rejection_reason, vehicle_info, vehicle_plate, license_number, 
-                       emergency_contact, profile_picture, created_at 
-                FROM drivers 
+                SELECT d.driver_id, d.name, d.email, d.phone, d.zone, d.status, d.approval_status, 
+                       d.rejection_reason, d.vehicle_info, d.vehicle_plate, d.license_number, 
+                       d.emergency_contact, COALESCE(d.earning_per_pickup, 1.50) as earning_per_pickup,
+                       d.profile_picture, d.created_at,
+                       COUNT(DISTINCT CASE WHEN r.status = 'Completed' THEN r.request_id END) as completed_pickups,
+                       COALESCE(COUNT(DISTINCT CASE WHEN r.status = 'Completed' THEN r.request_id END) * COALESCE(d.earning_per_pickup, 1.50), 0) as total_earnings,
+                       COALESCE(COUNT(DISTINCT CASE WHEN r.status = 'Completed' AND (r.request_time >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY) OR MONTH(r.request_time) = MONTH(CURRENT_DATE())) THEN r.request_id END) * COALESCE(d.earning_per_pickup, 1.50), 0) as monthly_earnings
+                FROM drivers d
+                LEFT JOIN waste_requests r ON (r.driver_id = d.driver_id OR EXISTS (SELECT 1 FROM assignments a WHERE a.request_id = r.request_id AND a.driver_id = d.driver_id))
+                GROUP BY d.driver_id
                 ORDER BY 
                     CASE 
-                        WHEN approval_status = 'Pending' THEN 1 
-                        WHEN approval_status = 'Approved' THEN 2 
+                        WHEN d.approval_status = 'Pending' THEN 1 
+                        WHEN d.approval_status = 'Approved' THEN 2 
                         ELSE 3 
                     END, 
-                    created_at DESC
+                    d.created_at DESC
             ");
             sendResponse('success', 'Drivers fetched', $stmt->fetchAll(PDO::FETCH_ASSOC));
         } catch (PDOException $e) {
@@ -1105,7 +1249,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                        COALESCE(r.name, CONCAT('Resident #', p.resident_id)) as resident_name, 
                        COALESCE(r.phone, 'N/A') as resident_phone
                 FROM payments p
-                LEFT JOIN residents r ON p.resident_id = r.resident_id
+                INNER JOIN residents r ON p.resident_id = r.resident_id
                 ORDER BY p.paid_at DESC, p.payment_id DESC
             ");
             sendResponse('success', 'Payments fetched', $stmt->fetchAll());
@@ -1179,7 +1323,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     elseif ($action === 'get_all_messages') {
         try {
-            // 1. Fetch direct messages
+            // 1. Fetch direct messages belonging to active registered residents or drivers
             $stmtMsg = $conn->query("
                 SELECT m.*, 
                 m.message_id as id,
@@ -1187,7 +1331,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 CASE 
                     WHEN m.sender_type = 'Resident' THEN r.name
                     WHEN m.sender_type = 'Driver' THEN d.name
-                    ELSE 'System User'
+                    WHEN m.sender_type = 'Admin' THEN 'Admin'
+                    ELSE NULL
                 END as sender_name,
                 CASE 
                     WHEN m.sender_type = 'Resident' THEN r.address
@@ -1198,9 +1343,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 FROM messages m
                 LEFT JOIN residents r ON m.sender_type = 'Resident' AND m.sender_id = r.resident_id
                 LEFT JOIN drivers d ON m.sender_type = 'Driver' AND m.sender_id = d.driver_id
+                WHERE (m.sender_type = 'Resident' AND r.resident_id IS NOT NULL)
+                   OR (m.sender_type = 'Driver' AND d.driver_id IS NOT NULL)
+                   OR (m.sender_type = 'Admin')
                 ORDER BY m.created_at DESC
             ");
-            $directMessages = $stmtMsg ? $stmtMsg->fetchAll(PDO::FETCH_ASSOC) : [];
+            $rawDirect = $stmtMsg ? $stmtMsg->fetchAll(PDO::FETCH_ASSOC) : [];
+            $directMessages = [];
+            foreach ($rawDirect as $dm) {
+                if (empty($dm['sender_name']) || $dm['sender_name'] === 'Unknown' || $dm['sender_name'] === 'System User') {
+                    continue;
+                }
+                $directMessages[] = $dm;
+            }
 
             // 2. Fetch notifications for Admin (reports, driver issues, emergency, requests)
             $stmtNotif = $conn->query("
@@ -1223,61 +1378,97 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $title = $n['title'] ?? 'Notification';
                 $msgText = $n['message'] ?? '';
                 
-                $sender_type = 'Resident';
-                $sender_name = 'Resident';
+                $sender_type = null;
+                $sender_name = null;
                 $sender_area = 'Mogadishu';
-                $sender_id = 1;
+                $sender_id = null;
                 $total_paid = null;
 
-                if (stripos($title, 'Driver') !== false || stripos($msgText, 'Driver Name') !== false || stripos($title, 'Job Rejected') !== false || stripos($title, 'Emergency') !== false || stripos($msgText, 'Vehicle') !== false) {
-                    $sender_type = 'Driver';
-                    if (preg_match('/Driver Name:\s*([^\n\r]+)/i', $msgText, $dm)) {
-                        $sender_name = trim($dm[1]);
-                    } elseif (preg_match('/Driver\s+#?(\d+)/i', $title, $dm)) {
-                        $sender_id = (int)$dm[1];
-                        $sDrv = $conn->prepare("SELECT name, zone FROM drivers WHERE driver_id = ?");
-                        $sDrv->execute([$sender_id]);
+                // Try driver resolution
+                if (stripos($title, 'Driver') !== false || stripos($msgText, 'Driver Name') !== false || stripos($title, 'Job Rejected') !== false || stripos($title, 'Emergency') !== false || stripos($msgText, 'Vehicle') !== false || stripos($title, 'Accident') !== false) {
+                    $extractedName = '';
+                    if (preg_match('/Driver Name:\s*([^\n\r,]+)/i', $msgText, $dm)) {
+                        $extractedName = trim($dm[1]);
+                    } elseif (preg_match('/Driver\s+([a-zA-Z0-9_-]+)/i', $title, $dm) && !in_array(strtolower($dm[1]), ['en', 'accepted', 'rejected', 'cancelled', 'application', 'status'])) {
+                        $extractedName = trim($dm[1]);
+                    }
+
+                    if ($extractedName) {
+                        $sDrv = $conn->prepare("SELECT driver_id, name, zone FROM drivers WHERE LOWER(name) = LOWER(?) OR name LIKE ? LIMIT 1");
+                        $sDrv->execute([$extractedName, '%' . $extractedName . '%']);
                         if ($rowD = $sDrv->fetch(PDO::FETCH_ASSOC)) {
+                            $sender_type = 'Driver';
                             $sender_name = $rowD['name'];
                             $sender_area = $rowD['zone'];
+                            $sender_id = $rowD['driver_id'];
                         }
-                    } else {
-                        $sender_name = 'Driver';
                     }
 
-                    $sDrv2 = $conn->prepare("SELECT driver_id, zone FROM drivers WHERE name LIKE ? LIMIT 1");
-                    $sDrv2->execute(['%' . $sender_name . '%']);
-                    if ($rowD2 = $sDrv2->fetch(PDO::FETCH_ASSOC)) {
-                        $sender_id = $rowD2['driver_id'];
-                        $sender_area = $rowD2['zone'];
-                    }
-                } else {
-                    $sender_type = 'Resident';
-                    if (preg_match('/submitted by\s+([^\n\r.]+)/i', $msgText, $rm)) {
-                        $sender_name = trim($rm[1]);
-                    } elseif (preg_match('/by\s+([^\n\r.]+)/i', $msgText, $rm)) {
-                        $sender_name = trim($rm[1]);
-                    } else {
-                        $sender_name = 'Resident';
-                    }
-
-                    $sRes = $conn->prepare("SELECT resident_id, address FROM residents WHERE name LIKE ? LIMIT 1");
-                    $sRes->execute(['%' . $sender_name . '%']);
-                    if ($rowR = $sRes->fetch(PDO::FETCH_ASSOC)) {
-                        $sender_id = $rowR['resident_id'];
-                        $sender_area = $rowR['address'];
-                        $sPay = $conn->prepare("SELECT SUM(amount) as tp FROM payments WHERE resident_id = ? AND status = 'Completed'");
-                        $sPay->execute([$sender_id]);
-                        $total_paid = $sPay->fetchColumn() ?: null;
+                    if (!$sender_name && preg_match('/Driver\s+#?(\d+)/i', $title . ' ' . $msgText, $dm)) {
+                        $sId = (int)$dm[1];
+                        $sDrv = $conn->prepare("SELECT driver_id, name, zone FROM drivers WHERE driver_id = ?");
+                        $sDrv->execute([$sId]);
+                        if ($rowD = $sDrv->fetch(PDO::FETCH_ASSOC)) {
+                            $sender_type = 'Driver';
+                            $sender_name = $rowD['name'];
+                            $sender_area = $rowD['zone'];
+                            $sender_id = $rowD['driver_id'];
+                        }
                     }
                 }
 
-                // Deduplicate if identical text exists in directMessages
+                // If not resolved as driver, try resident resolution
+                if (!$sender_name) {
+                    $extractedResName = '';
+                    if (preg_match('/submitted by\s+([^\n\r.:]+)/i', $msgText, $rm)) {
+                        $extractedResName = trim($rm[1]);
+                    } elseif (preg_match('/cancelled by\s+([^\n\r.:]+)/i', $msgText, $rm)) {
+                        $extractedResName = trim($rm[1]);
+                    } elseif (preg_match('/paid\s+.*?\s+by\s+([^\n\r.:]+)/i', $msgText, $rm)) {
+                        $extractedResName = trim($rm[1]);
+                    }
+
+                    if ($extractedResName) {
+                        $sRes = $conn->prepare("SELECT resident_id, name, address FROM residents WHERE LOWER(name) = LOWER(?) OR name LIKE ? LIMIT 1");
+                        $sRes->execute([$extractedResName, '%' . $extractedResName . '%']);
+                        if ($rowR = $sRes->fetch(PDO::FETCH_ASSOC)) {
+                            $sender_type = 'Resident';
+                            $sender_name = $rowR['name'];
+                            $sender_area = $rowR['address'];
+                            $sender_id = $rowR['resident_id'];
+                            
+                            $sPay = $conn->prepare("SELECT SUM(amount) as tp FROM payments WHERE resident_id = ? AND status = 'Completed'");
+                            $sPay->execute([$sender_id]);
+                            $total_paid = $sPay->fetchColumn() ?: null;
+                        }
+                    }
+                }
+
+                // STRICT FILTER: If sender_name is NOT a registered driver or resident, DO NOT include this notification!
+                if (!$sender_name || !$sender_type) {
+                    continue;
+                }
+
+                // Deduplicate if identical or matching message exists in directMessages
                 $isDup = false;
                 foreach ($directMessages as $dm) {
-                    if ($dm['sender_type'] === $sender_type && (trim($dm['message']) === trim($msgText) || (strlen($msgText) > 15 && strpos($dm['message'], substr($msgText, 0, 30)) !== false))) {
-                        $isDup = true;
-                        break;
+                    if ($dm['sender_type'] === $sender_type) {
+                        $dmText = trim($dm['message']);
+                        $nMsgText = trim($msgText);
+
+                        // Strip standard notification header prefixes
+                        $cleanDmText = trim(preg_replace('/^(A new report was submitted by [^\n:]+:\s*|To [^\n:]+:\s*|\[[^\]]+\]\s*)/i', '', $dmText));
+                        $cleanNMsgText = trim(preg_replace('/^(A new report was submitted by [^\n:]+:\s*|To [^\n:]+:\s*|\[[^\]]+\]\s*)/i', '', $nMsgText));
+
+                        if ($dmText === $nMsgText ||
+                            strpos($nMsgText, $dmText) !== false ||
+                            strpos($dmText, $nMsgText) !== false ||
+                            (strlen($cleanDmText) >= 2 && (strpos($nMsgText, $cleanDmText) !== false || strpos($cleanNMsgText, $cleanDmText) !== false)) ||
+                            (strlen($cleanNMsgText) >= 2 && (strpos($dmText, $cleanNMsgText) !== false || strpos($cleanDmText, $cleanNMsgText) !== false))
+                        ) {
+                            $isDup = true;
+                            break;
+                        }
                     }
                 }
 
@@ -1389,6 +1580,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                     res.phone as resident_phone,
                     COALESCE(d.driver_id, r.driver_id, 0) as driver_id,
                     COALESCE(d.name, (SELECT d2.name FROM drivers d2 WHERE d2.driver_id = r.driver_id), 'Unassigned') as driver_name,
+                    COALESCE(d.earning_per_pickup, (SELECT d3.earning_per_pickup FROM drivers d3 WHERE d3.driver_id = r.driver_id), 1.50) as driver_earning_rate,
+                    CASE WHEN r.status = 'Completed' THEN COALESCE(d.earning_per_pickup, (SELECT d3.earning_per_pickup FROM drivers d3 WHERE d3.driver_id = r.driver_id), 1.50) ELSE 0.00 END as driver_earned,
                     r.address,
                     r.request_time,
                     r.status as request_status,
@@ -1474,6 +1667,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $completed_count = 0;
             $total_paid = 0.0;
             $unpaid_balance = 0.0;
+            $total_driver_earnings = 0.0;
 
             foreach ($records as $rec) {
                 if ($rec['request_status'] === 'Completed') {
@@ -1485,6 +1679,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 } else {
                     $unpaid_balance += $amt;
                 }
+                $total_driver_earnings += floatval($rec['driver_earned'] ?? 0);
             }
 
             $completion_rate = $total_requests > 0 ? round(($completed_count / $total_requests) * 100, 1) : 0;
@@ -1495,7 +1690,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                     'completed_count' => $completed_count,
                     'completion_rate' => $completion_rate,
                     'total_paid' => number_format($total_paid, 2),
-                    'unpaid_balance' => number_format($unpaid_balance, 2)
+                    'unpaid_balance' => number_format($unpaid_balance, 2),
+                    'total_driver_earnings' => number_format($total_driver_earnings, 2)
                 ],
                 'records' => $records
             ]);

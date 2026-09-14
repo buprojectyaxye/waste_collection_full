@@ -197,6 +197,7 @@ function showSection(sectionId) {
         }
     }, 10);
 }
+window.showSection = showSection;
 
 async function loadDashboard() {
     let stats = {
@@ -272,7 +273,7 @@ async function loadPayments() {
             if (paymentsRes.data.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No payment transactions found.</td></tr>';
             } else {
-                paymentsRes.data.slice(0, 10).forEach(p => {
+                paymentsRes.data.forEach(p => {
                     const dateFormatted = p.paid_at 
                         ? new Date(p.paid_at).toLocaleDateString(window.currentLocale || 'en-US', {month: 'short', day: 'numeric', year: 'numeric'}) 
                         : 'Aug 1, 2026';
@@ -782,32 +783,52 @@ async function filterAllRequests() {
 }
 
 async function exportAllRequestsCSV() {
-    const tbody = document.getElementById('requests-tbody');
-    if (!tbody) return;
-    
-    let csvContent = "data:text/csv;charset=utf-8,Request ID,Resident Address,Request Date & Time,Status,Assigned Driver\n";
-    const rows = tbody.getElementsByTagName('tr');
-    
-    for (let i = 0; i < rows.length; i++) {
-        if(rows[i].style.display !== 'none') {
-            let rowData = [];
-            const cols = rows[i].querySelectorAll('td');
-            for (let j = 0; j < cols.length - 1; j++) { // Skip the Actions column
-                let data = cols[j].textContent.replace(/(\r\n|\n|\r)/gm, "").trim();
-                // Escape commas by enclosing in quotes
-                rowData.push('"' + data + '"');
+    let requests = window.allRequests;
+    if (!requests || !Array.isArray(requests) || requests.length === 0) {
+        try {
+            const res = await apiCall('/admin.php?action=get_all_requests');
+            if (res && Array.isArray(res.data)) {
+                requests = res.data;
             }
-            csvContent += rowData.join(",") + "\n";
+        } catch(e) {}
+    }
+
+    if (!requests || requests.length === 0) {
+        showToast('No waste requests available to export!', 'warning');
+        return;
+    }
+
+    // Filter out rows hidden by search/status filter if table exists
+    const tbody = document.getElementById('requests-tbody');
+    let exportList = requests;
+    if (tbody) {
+        const rows = Array.from(tbody.getElementsByTagName('tr'));
+        const visibleIds = new Set();
+        rows.forEach(r => {
+            if (r.style.display !== 'none' && !r.classList.contains('d-none')) {
+                const reqIdAttr = r.getAttribute('data-request-id') || (r.cells[0] ? r.cells[0].textContent.replace('#', '').trim() : '');
+                if (reqIdAttr) visibleIds.add(reqIdAttr);
+            }
+        });
+        if (visibleIds.size > 0) {
+            exportList = requests.filter(r => visibleIds.has(String(r.request_id)));
         }
     }
-    
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "all_waste_requests.csv");
-    document.body.appendChild(link); // Required for FF
-    link.click();
-    document.body.removeChild(link);
+
+    const excelData = exportList.map(r => ({
+        "Request ID": `#${r.request_id}`,
+        "Resident Name": r.resident_name || ('Resident #' + (r.resident_id || '')),
+        "Resident Phone": r.resident_phone || 'N/A',
+        "Resident Address": (r.address || 'N/A').replace(/https?:\/\/\S+/gi, '').trim(),
+        "Assigned Driver": r.driver_name || 'Unassigned',
+        "Request Date & Time": new Date(r.request_time).toLocaleString(),
+        "Job Status": r.status || 'Pending',
+        "Amount ($)": parseFloat(r.paid_amount || 5.00).toFixed(2),
+        "Payment Status": r.payment_status || 'Paid'
+    }));
+
+    exportToExcelOrCSV(excelData, `All_Waste_Requests_${new Date().toISOString().slice(0,10)}.xls`, "All Waste Requests");
+    showToast('All Waste Requests exported to Excel successfully!', 'success');
 }
 
 async function loadRequests() {
@@ -866,7 +887,7 @@ async function loadRequests() {
         }
 
         tbody.innerHTML += `
-            <tr>
+            <tr data-request-id="${req.request_id}">
                 <td class="fw-bold">#${req.request_id}</td>
                 <td class="fw-semibold text-dark">${req.resident_name || 'Resident #' + req.resident_id}</td>
                 <td>${formatAddress(req.address)}</td>
@@ -1619,6 +1640,10 @@ async function loadDrivers() {
         let activeDrv = 0;
         let pendingDrv = 0;
         let offlineDrv = 0;
+        let totalEarningsSum = 0;
+        let totalPickupsSum = 0;
+        let rateSum = 0;
+
         window.allDrivers.forEach(d => {
             const appSt = d.approval_status || 'Approved';
             if (appSt === 'Pending') {
@@ -1628,6 +1653,9 @@ async function loadDrivers() {
             } else {
                 offlineDrv++;
             }
+            totalEarningsSum += parseFloat(d.total_earnings || 0);
+            totalPickupsSum += parseInt(d.completed_pickups || 0);
+            rateSum += parseFloat(d.earning_per_pickup || 1.50);
         });
         
         const totDrvEl = document.getElementById('stat-total-drivers');
@@ -1638,6 +1666,15 @@ async function loadDrivers() {
         if(actDrvEl) actDrvEl.textContent = activeDrv;
         const offDrvEl = document.getElementById('stat-offline-drivers');
         if(offDrvEl) offDrvEl.textContent = offlineDrv;
+
+        // Financial Earnings Stats
+        const avgRate = window.allDrivers.length > 0 ? (rateSum / window.allDrivers.length) : 1.50;
+        const totEarnEl = document.getElementById('stat-total-earnings');
+        if (totEarnEl) totEarnEl.textContent = '$' + totalEarningsSum.toFixed(2);
+        const avgRateEl = document.getElementById('stat-avg-rate');
+        if (avgRateEl) avgRateEl.textContent = '$' + avgRate.toFixed(2) + ' / pickup';
+        const pickEl = document.getElementById('stat-completed-pickups');
+        if (pickEl) pickEl.textContent = totalPickupsSum;
         
         filterDriversTable();
     } catch (err) {
@@ -1681,7 +1718,7 @@ async function renderDriversTable(drivers) {
     const tbody = document.getElementById('drivers-tbody');
     tbody.innerHTML = '';
     if (drivers.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted"><i class="fas fa-truck-slash me-2"></i>No drivers found.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-muted"><i class="fas fa-truck-slash me-2"></i>No drivers found.</td></tr>';
         return;
     }
     drivers.forEach(driver => {
@@ -1747,6 +1784,9 @@ async function renderDriversTable(drivers) {
         
         const initials = getInitials(capName);
         const licText = driver.license_number ? `<div class="mt-1"><span class="badge bg-light text-secondary border small"><i class="fas fa-id-badge text-primary me-1"></i>${driver.license_number}</span></div>` : '';
+        const ratePerPickupText = '$' + parseFloat(driver.earning_per_pickup || 1.50).toFixed(2);
+        const totalEarnedText = '$' + parseFloat(driver.total_earnings || 0).toFixed(2);
+        const completedPickupsCount = driver.completed_pickups || 0;
         
         tbody.innerHTML += `
             <tr class="${appStatus === 'Pending' ? 'table-warning bg-opacity-10' : ''}">
@@ -1766,6 +1806,11 @@ async function renderDriversTable(drivers) {
                 </td>
                 <td>${vehicleHtml}</td>
                 <td>${capZone}</td>
+                <td><span class="badge bg-success bg-opacity-10 text-success border border-success fw-bold px-2 py-1">${ratePerPickupText} / pickup</span></td>
+                <td>
+                    <div class="fw-bold text-dark">${totalEarnedText}</div>
+                    <small class="text-muted"><i class="fas fa-check-circle text-success me-1"></i>${completedPickupsCount} pickups</small>
+                </td>
                 <td>${statusBadgeHtml}</td>
                 <td class="text-end text-nowrap">
                     ${actionsHtml}
@@ -1787,6 +1832,7 @@ window.openApproveDriverModal = function(driverId) {
     const dContact = driver ? `${driver.phone || ''} | ${driver.email || ''}` : '';
     const dLicense = driver ? (driver.license_number || 'N/A') : 'N/A';
     const dZone = driver ? (driver.zone || 'Wadajir') : 'Wadajir';
+    const dRate = driver ? parseFloat(driver.earning_per_pickup || 1.50).toFixed(2) : '1.50';
 
     const idEl = document.getElementById('approve_d_id');
     if (idEl) idEl.value = driverId;
@@ -1796,6 +1842,8 @@ window.openApproveDriverModal = function(driverId) {
     if (contactEl) contactEl.textContent = dContact;
     const licEl = document.getElementById('approve_d_license_display');
     if (licEl) licEl.textContent = dLicense;
+    const rateEl = document.getElementById('approve_d_rate');
+    if (rateEl) rateEl.value = dRate;
     
     // Suggested Plate
     const plateInput = document.getElementById('approve_d_plate');
@@ -1814,6 +1862,9 @@ window.submitApproveDriver = async function(e) {
     if (e) e.preventDefault();
     const driverId = document.getElementById('approve_d_id').value;
     const vehiclePlate = document.getElementById('approve_d_plate').value.trim();
+    let earningRate = parseFloat(document.getElementById('approve_d_rate')?.value || 1.50);
+    if (isNaN(earningRate) || earningRate < 0.50) earningRate = 0.50;
+    if (earningRate > 5.00) earningRate = 5.00;
 
     if (!vehiclePlate) {
         if (typeof Swal !== 'undefined') {
@@ -1827,7 +1878,8 @@ window.submitApproveDriver = async function(e) {
     try {
         const res = await apiCall('/admin.php?action=approve_driver', 'POST', {
             driver_id: driverId,
-            vehicle_plate: vehiclePlate
+            vehicle_plate: vehiclePlate,
+            earning_per_pickup: earningRate
         });
 
         if (res && res.status === 'success') {
@@ -1840,12 +1892,12 @@ window.submitApproveDriver = async function(e) {
                 Swal.fire({
                     icon: 'success',
                     title: 'Driver Approved! 🎉',
-                    text: `Assigned Vehicle Plate: ${vehiclePlate}`,
-                    timer: 2000,
+                    html: `Assigned Vehicle Plate: <code>${vehiclePlate}</code><br>Earning Rate: <b>$${earningRate.toFixed(2)} / pickup</b>`,
+                    timer: 2500,
                     showConfirmButton: false
                 });
             } else {
-                showToast(`🎉 Driver approved successfully! Assigned Plate: ${vehiclePlate}`, 'success');
+                showToast(`🎉 Driver approved successfully! Assigned Plate: ${vehiclePlate} ($${earningRate.toFixed(2)}/pickup)`, 'success');
             }
             loadDrivers();
         } else {
@@ -1954,6 +2006,9 @@ window.submitAdminAddDriver = async function(e) {
     }
 
     const truckPlate = 'BU-' + digitsOnly;
+    let earningRate = parseFloat(document.getElementById('add_d_rate')?.value || 1.50);
+    if (isNaN(earningRate) || earningRate < 0.50) earningRate = 0.50;
+    if (earningRate > 5.00) earningRate = 5.00;
 
     const payload = {
         name: name,
@@ -1963,7 +2018,8 @@ window.submitAdminAddDriver = async function(e) {
         license_number: license,
         emergency_contact: emergency,
         zone: zone,
-        vehicle_plate: truckPlate
+        vehicle_plate: truckPlate,
+        earning_per_pickup: earningRate
     };
 
     try {
@@ -2217,6 +2273,9 @@ function exportCurrentDriverReportPDF() {
     }
     const driver = currentActiveDriverDetails.driver;
     const jobs = currentActiveDriverDetails.jobs || [];
+    const driverRate = parseFloat(driver.earning_per_pickup || 1.50);
+    const completedJobsCount = jobs.filter(j => (j.request_status === 'Completed' || j.request_status === 'Done')).length;
+    const totalEarningsCalc = completedJobsCount * driverRate;
 
     try {
         const { jsPDF } = window.jspdf;
@@ -2224,21 +2283,26 @@ function exportCurrentDriverReportPDF() {
 
         doc.setFontSize(16);
         doc.setTextColor(46, 125, 50);
-        doc.text(`Driver Performance & Job Report - ${driver.name}`, 14, 18);
+        doc.text(`Driver Performance & Earnings Report - ${driver.name}`, 14, 18);
 
         doc.setFontSize(10);
         doc.setTextColor(100);
         doc.text(`Email: ${driver.email || 'N/A'} | Phone: ${driver.phone || 'N/A'} | Zone: ${driver.zone || 'N/A'}`, 14, 25);
-        doc.text(`Vehicle: ${driver.vehicle_info || 'N/A'} | Generated: ${new Date().toLocaleString()}`, 14, 31);
+        doc.text(`Vehicle: ${driver.vehicle_plate || driver.vehicle_info || 'N/A'} | Rate: $${driverRate.toFixed(2)}/pickup | Total Earnings: $${totalEarningsCalc.toFixed(2)} (${completedJobsCount} pickups)`, 14, 31);
 
-        const tableColumn = ["Date/Time", "Resident", "Phone", "Waste Type", "Status"];
-        const tableRows = jobs.map(j => [
-            new Date(j.assigned_time || j.request_time).toLocaleString(),
-            j.resident_name || 'N/A',
-            j.resident_phone || 'N/A',
-            j.waste_type || 'General Waste',
-            j.request_status || 'Assigned'
-        ]);
+        const tableColumn = ["Date/Time", "Resident", "Phone", "Waste Type", "Status", "Driver Earned ($)"];
+        const tableRows = jobs.map(j => {
+            const isDone = (j.request_status === 'Completed' || j.request_status === 'Done');
+            const earned = isDone ? driverRate : 0;
+            return [
+                new Date(j.assigned_time || j.request_time).toLocaleString(),
+                j.resident_name || 'N/A',
+                j.resident_phone || 'N/A',
+                j.waste_type || 'General Waste',
+                j.request_status || 'Assigned',
+                `$${earned.toFixed(2)}`
+            ];
+        });
 
         doc.autoTable({
             head: [tableColumn],
@@ -2263,25 +2327,29 @@ function exportCurrentDriverReportExcel() {
     }
     const driver = currentActiveDriverDetails.driver;
     const jobs = currentActiveDriverDetails.jobs || [];
+    const driverRate = parseFloat(driver.earning_per_pickup || 1.50);
 
     try {
-        const excelData = jobs.map(j => ({
-            "Driver Name": driver.name,
-            "Date/Time": new Date(j.assigned_time || j.request_time).toLocaleString(),
-            "Resident Name": j.resident_name || 'N/A',
-            "Resident Phone": j.resident_phone || 'N/A',
-            "Waste Type": j.waste_type || 'General Waste',
-            "Status": j.request_status || 'Assigned'
-        }));
+        const excelData = jobs.map(j => {
+            const isDone = (j.request_status === 'Completed' || j.request_status === 'Done');
+            const earned = isDone ? driverRate : 0;
+            return {
+                "Driver Name": driver.name,
+                "Vehicle Plate": driver.vehicle_plate || 'N/A',
+                "Rate / Pickup ($)": driverRate.toFixed(2),
+                "Driver Earned ($)": earned.toFixed(2),
+                "Date/Time": new Date(j.assigned_time || j.request_time).toLocaleString(),
+                "Resident Name": j.resident_name || 'N/A',
+                "Resident Phone": j.resident_phone || 'N/A',
+                "Waste Type": j.waste_type || 'General Waste',
+                "Status": j.request_status || 'Assigned'
+            };
+        });
 
-        const ws = XLSX.utils.json_to_sheet(excelData);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, `${driver.name} Jobs`);
-
-        XLSX.writeFile(wb, `Driver_Report_${driver.name.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.xlsx`);
-        showToast('Driver Excel Report downloaded successfully!', 'success');
+        exportToExcelOrCSV(excelData, `Driver_Report_${driver.name.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.xlsx`, `${driver.name} Jobs`);
+        showToast('Driver Excel/CSV Report downloaded successfully!', 'success');
     } catch (err) {
-        showToast('Failed to export driver Excel: ' + err.message, 'danger');
+        showToast('Failed to export driver report: ' + err.message, 'danger');
     }
 }
 
@@ -2493,12 +2561,14 @@ async function openEditDriverModal(driverId) {
         name: 'Malik',
         phone: '+252 61 700 0001',
         zone: 'Hodan',
+        earning_per_pickup: 1.50,
         vehicle_info: 'TR-401 (Isuzu Dump Truck)'
     };
     
     if (document.getElementById('edit_d_id')) document.getElementById('edit_d_id').value = driver.driver_id;
     if (document.getElementById('edit_d_name')) document.getElementById('edit_d_name').value = capitalizeWords(driver.name);
     if (document.getElementById('edit_d_phone')) document.getElementById('edit_d_phone').value = formatPhone(driver.phone);
+    if (document.getElementById('edit_d_rate')) document.getElementById('edit_d_rate').value = parseFloat(driver.earning_per_pickup || 1.50).toFixed(2);
     if (document.getElementById('edit_d_zone')) document.getElementById('edit_d_zone').value = driver.zone || 'Hodan';
     if (document.getElementById('edit_d_vehicle')) document.getElementById('edit_d_vehicle').value = driver.vehicle_info || '';
     
@@ -2511,11 +2581,16 @@ async function openEditDriverModal(driverId) {
 
 document.getElementById('editDriverForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
+    let earningRate = parseFloat(document.getElementById('edit_d_rate')?.value || 1.50);
+    if (isNaN(earningRate) || earningRate < 0.50) earningRate = 0.50;
+    if (earningRate > 5.00) earningRate = 5.00;
+
     const data = {
         driver_id: document.getElementById('edit_d_id').value,
         name: document.getElementById('edit_d_name').value,
         phone: document.getElementById('edit_d_phone').value,
         zone: document.getElementById('edit_d_zone').value,
+        earning_per_pickup: earningRate,
         vehicle_info: document.getElementById('edit_d_vehicle').value
     };
     
@@ -3081,7 +3156,7 @@ async function loadMessagesSection() {
         const res = await apiCall('/admin.php?action=get_all_messages');
         tbody.innerHTML = '';
         
-        let messages = (res && res.data && Array.isArray(res.data)) ? res.data : [];
+        let messages = (res && res.data && Array.isArray(res.data)) ? res.data.filter(m => m.sender_name && m.sender_name !== 'Unknown' && m.sender_name !== 'System User') : [];
         window.allLoadedMessages = messages;
 
         if (messages.length === 0) {
@@ -4312,7 +4387,7 @@ async function generateAdvancedReport() {
 
     const tbody = document.getElementById('rptTableBody');
     if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-muted"><i class="fas fa-spinner fa-spin me-2"></i>Generating analytics report...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-muted"><i class="fas fa-spinner fa-spin me-2"></i>Generating analytics report...</td></tr>';
 
     try {
         let url = `/admin.php?action=get_advanced_reports&role_filter=${role_filter}&user_key=${user_key}&date_range=${date_range}&status_filter=${status_filter}`;
@@ -4332,10 +4407,11 @@ async function generateAdvancedReport() {
             if (document.getElementById('rptPendingJobs')) document.getElementById('rptPendingJobs').innerText = pendingCount > 0 ? pendingCount : 0;
             if (document.getElementById('rptCompletionRate')) document.getElementById('rptCompletionRate').innerText = (sum.completion_rate || 0) + '%';
             if (document.getElementById('rptTotalPaid')) document.getElementById('rptTotalPaid').innerText = '$' + sum.total_paid;
+            if (document.getElementById('rptDriverEarnings')) document.getElementById('rptDriverEarnings').innerText = '$' + (sum.total_driver_earnings || '0.00');
             if (document.getElementById('rptUnpaidBalance')) document.getElementById('rptUnpaidBalance').innerText = '$' + sum.unpaid_balance;
 
             if (records.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-muted">No records match the selected filters.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="11" class="text-center py-4 text-muted">No records match the selected filters.</td></tr>';
                 return;
             }
 
@@ -4343,17 +4419,20 @@ async function generateAdvancedReport() {
                 <tr>
                     <td class="fw-bold">#${r.request_id}</td>
                     <td><div class="fw-bold text-dark">${r.resident_name}</div><small class="text-muted">${r.resident_phone}</small></td>
-                    <td class="small" style="max-width: 200px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">${r.address || 'N/A'}</td>
+                    <td><span class="badge bg-success">Resident</span></td>
+                    <td class="small" style="max-width: 180px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">${r.address || 'N/A'}</td>
                     <td><span class="badge bg-light text-dark border"><i class="fas fa-truck text-muted me-1"></i> ${r.driver_name}</span></td>
+                    <td><span class="badge bg-success bg-opacity-10 text-success border border-success fw-bold">$${parseFloat(r.driver_earning_rate || 1.50).toFixed(2)}/pickup</span></td>
+                    <td class="fw-bold text-success">$${parseFloat(r.driver_earned || 0).toFixed(2)}</td>
                     <td class="small">${new Date(r.request_time).toLocaleString()}</td>
                     <td><span class="badge bg-${r.request_status === 'Completed' ? 'success' : (r.request_status === 'Pending' ? 'warning' : 'info')}">${r.request_status}</span></td>
-                    <td class="fw-bold text-success">$${parseFloat(r.paid_amount).toFixed(2)}</td>
+                    <td class="fw-bold text-dark">$${parseFloat(r.paid_amount).toFixed(2)}</td>
                     <td><span class="badge bg-${r.payment_status === 'Paid' ? 'success' : 'danger'}">${r.payment_status}</span></td>
                 </tr>
             `).join('');
         }
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger py-4">Failed to load reports: ${err.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="11" class="text-center text-danger py-4">Failed to load reports: ${err.message}</td></tr>`;
     }
 }
 
@@ -4375,13 +4454,15 @@ function exportReportsPDF() {
         doc.setTextColor(100);
         doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 25);
 
-        const tableColumn = ["Job #", "Resident", "Phone", "Address", "Driver", "Request Time", "Status", "Amount", "Payment"];
+        const tableColumn = ["Job #", "Resident", "Phone", "Address", "Driver", "Driver Rate", "Driver Earned", "Request Time", "Status", "Revenue", "Payment"];
         const tableRows = lastReportRecords.map(r => [
             `#${r.request_id}`,
             r.resident_name,
             r.resident_phone,
             r.address,
             r.driver_name,
+            `$${parseFloat(r.driver_earning_rate || 1.50).toFixed(2)}`,
+            `$${parseFloat(r.driver_earned || 0).toFixed(2)}`,
             new Date(r.request_time).toLocaleString(),
             r.request_status,
             `$${parseFloat(r.paid_amount).toFixed(2)}`,
@@ -4405,6 +4486,142 @@ function exportReportsPDF() {
     }
 }
 
+function exportToExcelOrCSV(excelData, filename, sheetName = 'Smart Waste Report') {
+    if (!excelData || excelData.length === 0) {
+        showToast('No data available to export!', 'warning');
+        return;
+    }
+
+    const headers = Object.keys(excelData[0]);
+
+    // Map auto-fit column widths according to header title and maximum cell string length
+    const colWidths = {};
+    headers.forEach(h => {
+        let maxLen = h.length;
+        excelData.forEach(row => {
+            const valStr = String(row[h] || '');
+            if (valStr.length > maxLen) maxLen = valStr.length;
+        });
+        colWidths[h] = Math.max(maxLen * 10 + 35, 120); // Minimum 120px width per column
+    });
+
+    let headerColsHtml = '';
+    headers.forEach(h => {
+        headerColsHtml += `<th style="background-color: #1b5e20; color: #ffffff; font-size: 13px; font-weight: bold; text-align: center; vertical-align: middle; padding: 12px 14px; border: 1px solid #144718; width: ${colWidths[h]}px;">${h}</th>`;
+    });
+
+    let rowsHtml = '';
+    let totalAmount = 0;
+    let hasAmountCol = false;
+
+    excelData.forEach((row, idx) => {
+        const bg = (idx % 2 === 0) ? '#ffffff' : '#f4fbf7';
+        rowsHtml += `<tr style="background-color: ${bg};">`;
+        
+        headers.forEach(h => {
+            let val = row[h] !== null && row[h] !== undefined ? String(row[h]) : '';
+            let align = 'left';
+            let extraStyle = '';
+
+            if (h.toLowerCase().includes('id')) {
+                align = 'center';
+                extraStyle = 'font-weight: bold; color: #1b5e20;';
+            } else if (h.toLowerCase().includes('phone')) {
+                align = 'center';
+                extraStyle = "mso-number-format: '\\@';"; // Preserve phone text formatting in Excel
+            } else if (h.toLowerCase().includes('time') || h.toLowerCase().includes('date')) {
+                align = 'center';
+            } else if (h.toLowerCase().includes('amount')) {
+                align = 'right';
+                extraStyle = 'font-weight: bold; color: #2e7d32;';
+                hasAmountCol = true;
+                const parsedVal = parseFloat(val.replace(/[^0-9.]/g, ''));
+                if (!isNaN(parsedVal)) totalAmount += parsedVal;
+            } else if (h.toLowerCase().includes('status')) {
+                align = 'center';
+                if (val.toLowerCase().includes('paid') || val.toLowerCase().includes('completed') || val.toLowerCase().includes('success') || val.toLowerCase().includes('online')) {
+                    extraStyle = 'background-color: #d4edda; color: #155724; font-weight: bold; border-radius: 4px; padding: 4px 8px;';
+                } else if (val.toLowerCase().includes('pending') || val.toLowerCase().includes('assigned') || val.toLowerCase().includes('in progress')) {
+                    extraStyle = 'background-color: #fff3cd; color: #856404; font-weight: bold; border-radius: 4px; padding: 4px 8px;';
+                } else if (val.toLowerCase().includes('cancel') || val.toLowerCase().includes('fail') || val.toLowerCase().includes('reject')) {
+                    extraStyle = 'background-color: #f8d7da; color: #721c24; font-weight: bold; border-radius: 4px; padding: 4px 8px;';
+                }
+            }
+
+            rowsHtml += `<td style="font-size: 12px; font-family: 'Segoe UI', Arial, sans-serif; vertical-align: middle; padding: 10px 12px; border: 1px solid #e0e0e0; text-align: ${align}; ${extraStyle}">${val}</td>`;
+        });
+        rowsHtml += `</tr>`;
+    });
+
+    let summaryRowHtml = '';
+    if (hasAmountCol) {
+        summaryRowHtml = `
+            <tr style="background-color: #e8f5e9; font-weight: bold;">
+                <td colspan="${headers.length - 2}" style="font-size: 13px; font-weight: bold; text-align: right; padding: 12px; border: 1px solid #c8e6c9; color: #1b5e20;">Total Records: ${excelData.length}</td>
+                <td style="font-size: 13px; font-weight: bold; text-align: right; padding: 12px; border: 1px solid #c8e6c9; color: #1b5e20;">Total Amount: $${totalAmount.toFixed(2)}</td>
+                <td style="border: 1px solid #c8e6c9;"></td>
+            </tr>
+        `;
+    } else {
+        summaryRowHtml = `
+            <tr style="background-color: #e8f5e9; font-weight: bold;">
+                <td colspan="${headers.length}" style="font-size: 13px; font-weight: bold; text-align: left; padding: 12px; border: 1px solid #c8e6c9; color: #1b5e20;">Total Records Exported: ${excelData.length}</td>
+            </tr>
+        `;
+    }
+
+    const template = `
+        <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+        <head>
+            <meta http-equiv="content-type" content="text/plain; charset=UTF-8"/>
+            <!--[if gte mso 9]>
+            <xml>
+             <x:ExcelWorkbook>
+              <x:ExcelWorksheets>
+               <x:ExcelWorksheet>
+                <x:Name>${sheetName.replace(/[\\/*?:\[\]]/g, '')}</x:Name>
+                <x:WorksheetOptions>
+                 <x:DisplayGridlines/>
+                </x:WorksheetOptions>
+               </x:ExcelWorksheet>
+              </x:ExcelWorksheets>
+             </x:ExcelWorkbook>
+            </xml>
+            <![endif]-->
+            <style>
+                body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; }
+                table { border-collapse: collapse; width: 100%; }
+            </style>
+        </head>
+        <body>
+            <div style="background-color: #1b5e20; color: #ffffff; font-family: 'Segoe UI', Arial, sans-serif; font-size: 15px; font-weight: bold; text-align: center; padding: 14px; margin-bottom: 5px;">
+                SMART WASTE COLLECTION MANAGEMENT SYSTEM &mdash; EXPORT REPORT
+            </div>
+            <table border="1" cellpadding="0" cellspacing="0">
+                <thead>
+                    <tr>${headerColsHtml}</tr>
+                </thead>
+                <tbody>
+                    ${rowsHtml}
+                    ${summaryRowHtml}
+                </tbody>
+            </table>
+        </body>
+        </html>
+    `;
+
+    const blob = new Blob(['\ufeff' + template], { type: 'application/vnd.ms-excel;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const finalFilename = filename.endsWith('.xls') || filename.endsWith('.xlsx') ? filename.replace(/\.xlsx$/i, '.xls') : filename + '.xls';
+    link.setAttribute('href', url);
+    link.setAttribute('download', finalFilename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
+
 function exportReportsExcel() {
     if (!lastReportRecords || lastReportRecords.length === 0) {
         showToast('No report records to export!', 'warning');
@@ -4418,18 +4635,16 @@ function exportReportsExcel() {
             "Phone": r.resident_phone,
             "Address": r.address,
             "Assigned Driver": r.driver_name,
+            "Driver Rate ($/pickup)": parseFloat(r.driver_earning_rate || 1.50).toFixed(2),
+            "Driver Earned ($)": parseFloat(r.driver_earned || 0).toFixed(2),
             "Request Time": new Date(r.request_time).toLocaleString(),
             "Job Status": r.request_status,
-            "Amount ($)": parseFloat(r.paid_amount).toFixed(2),
+            "Revenue Amount ($)": parseFloat(r.paid_amount).toFixed(2),
             "Payment Status": r.payment_status
         }));
 
-        const ws = XLSX.utils.json_to_sheet(excelData);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Analytics Report");
-
-        XLSX.writeFile(wb, `SmartWaste_Analytics_Report_${new Date().toISOString().slice(0,10)}.xlsx`);
-        showToast('Excel Report downloaded successfully!', 'success');
+        exportToExcelOrCSV(excelData, `SmartWaste_Analytics_Report_${new Date().toISOString().slice(0,10)}.xlsx`, "Analytics Report");
+        showToast('Excel/CSV Report downloaded successfully!', 'success');
     } catch (err) {
         console.error("Excel Export Error:", err);
         showToast('Excel Export failed: ' + err.message, 'danger');

@@ -174,10 +174,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
             $isPasswordValid = false;
-            if ($user) {
+            if ($user && !empty($user['password'])) {
                 if (password_verify($password, $user['password'])) {
                     $isPasswordValid = true;
-                } elseif (in_array($password, ['password', 'password123', 'admin123', 'admin'])) {
+                } elseif ($password === $user['password']) {
                     $isPasswordValid = true;
                 }
             }
@@ -219,6 +219,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'email' => $user['email'] ?? $user['name']
                 ];
 
+                // Set persistent 30-day role-specific authentication cookie (2,592,000 seconds)
+                try {
+                    $secretKey = "SWCMS_SECRET_KEY_2026";
+                    $userId = $user[$id_field];
+                    $tokenHash = hash_hmac('sha256', "$type:$userId:" . $user['password'], $secretKey);
+                    $tokenVal = base64_encode("$type:$userId:$tokenHash");
+                    setcookie("swcms_token_$type", $tokenVal, [
+                        'expires' => time() + 2592000,
+                        'path' => '/',
+                        'httponly' => true,
+                        'samesite' => 'Lax'
+                    ]);
+                } catch (Exception $exSetCookie) {}
+
                 $user['profilePic'] = $user['profile_picture'] ?? $user['profile_pic'] ?? null;
                 unset($user['password']); // Don't send password back
                 sendResponse('success', 'Login successful', ['user' => $user, 'type' => $type]);
@@ -253,11 +267,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
     elseif ($action === 'logout') {
-        $type = $_GET['type'] ?? $_SESSION['user_type'] ?? null;
+        $type = $_GET['type'] ?? $_POST['type'] ?? $data['type'] ?? $_SESSION['user_type'] ?? null;
+        
+        // Remove specific role session & cookie
         if ($type && isset($_SESSION['sessions'][$type])) {
             unset($_SESSION['sessions'][$type]);
         }
-        session_destroy();
+        if ($type) {
+            setcookie("swcms_token_$type", "", time() - 3600, "/");
+        } else {
+            setcookie("swcms_token_admin", "", time() - 3600, "/");
+            setcookie("swcms_token_driver", "", time() - 3600, "/");
+            setcookie("swcms_token_resident", "", time() - 3600, "/");
+        }
+
+        // Check if any other role sessions remain active
+        $activeRemaining = [];
+        if (isset($_SESSION['sessions']) && is_array($_SESSION['sessions'])) {
+            foreach ($_SESSION['sessions'] as $roleKey => $sessData) {
+                if (!empty($sessData['user_id'])) {
+                    $activeRemaining[$roleKey] = $sessData;
+                }
+            }
+        }
+
+        if (!empty($activeRemaining)) {
+            $nextRole = array_key_first($activeRemaining);
+            $nextSess = $activeRemaining[$nextRole];
+            $_SESSION['user_id'] = $nextSess['user_id'];
+            $_SESSION['user_type'] = $nextRole;
+            $_SESSION['name'] = $nextSess['name'];
+            $_SESSION['email'] = $nextSess['email'] ?? $nextSess['name'];
+        } else {
+            $_SESSION = [];
+            if (ini_get("session.use_cookies")) {
+                $params = session_get_cookie_params();
+                setcookie(session_name(), '', time() - 42000,
+                    $params["path"], $params["domain"],
+                    $params["secure"], $params["httponly"]
+                );
+            }
+            @session_destroy();
+        }
+
         sendResponse('success', 'Logged out successfully');
     }
 } elseif ($_SERVER['REQUEST_METHOD'] === 'GET') {

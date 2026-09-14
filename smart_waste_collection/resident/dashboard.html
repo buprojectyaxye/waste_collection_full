@@ -225,12 +225,29 @@
                 <span class="navbar-brand mb-0 h1 d-inline d-sm-none">Resident</span>
             </div>
             <div class="d-flex align-items-center text-white">
+                <!-- Resident Header Notifications Dropdown -->
+                <div class="dropdown me-2">
+                    <button class="btn btn-outline-light btn-sm rounded-circle position-relative d-flex align-items-center justify-content-center" data-bs-toggle="dropdown" aria-expanded="false" title="Notifications & Updates" style="width: 34px; height: 34px;">
+                        <i class="fas fa-bell"></i>
+                        <span id="resNotifBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger border border-light" style="font-size: 10px; padding: 2px 6px; display: none;">0</span>
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-end shadow-lg p-0 border-0" style="width: 330px; border-radius: 12px; overflow: hidden; margin-top: 10px; z-index: 1060;">
+                        <div class="bg-success text-white p-3 d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0 fw-bold"><i class="fas fa-bell me-2"></i>Notifications</h6>
+                            <span class="badge bg-white text-success rounded-pill" id="resNotifCount">0 New</span>
+                        </div>
+                        <div class="list-group list-group-flush" style="max-height: 320px; overflow-y: auto;" id="resNotifHeaderList">
+                            <div class="p-3 text-center text-muted small">No notifications yet.</div>
+                        </div>
+                    </div>
+                </div>
                 <button class="btn btn-outline-light btn-sm me-2 rounded-circle d-flex align-items-center justify-content-center" onclick="toggleGlobalDarkMode()" title="Toggle Dark Mode" style="width: 34px; height: 34px;">
                     <i class="fas fa-moon"></i>
                 </button>
-                <a href="#settings" onclick="showSection('settings')" class="text-white text-decoration-none d-flex align-items-center">
+                <a href="#settings" onclick="showSection('settings', event)" class="text-white text-decoration-none d-flex align-items-center me-2" title="View Profile / Settings">
                     <img src="" id="nav-profile-pic" class="rounded-circle d-none me-2" width="30" height="30" style="object-fit: cover;">
                     <i class="fas fa-user-circle fs-4 me-2" id="nav-profile-icon"></i>
+                    <span id="nav-resident-name" class="fw-bold me-1 text-white small" style="text-transform: capitalize;"></span>
                 </a>
                 <button class="btn btn-outline-light btn-sm ms-2" onclick="logout()">Logout</button>
             </div>
@@ -244,22 +261,22 @@
                 <div class="position-sticky pt-3">
                     <ul class="nav flex-column gap-2 p-2">
                         <li class="nav-item">
-                            <a class="nav-link active rounded" href="#dashboard" onclick="showSection('dashboard')">
+                            <a class="nav-link active rounded" href="#dashboard" onclick="showSection('dashboard', event)">
                                 <i class="fas fa-chart-bar me-2"></i> <span class="nav-text">Dashboard</span>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link rounded" href="#requests" onclick="showSection('requests')">
+                            <a class="nav-link rounded" href="#requests" onclick="showSection('requests', event)">
                                 <i class="fas fa-clipboard-list me-2"></i> <span class="nav-text">My Requests</span>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link rounded" href="#payments" onclick="showSection('payments')">
+                            <a class="nav-link rounded" href="#payments" onclick="showSection('payments', event)">
                                 <i class="fas fa-credit-card me-2"></i> <span class="nav-text">Payments</span>
                             </a>
                         </li>
                         <li class="nav-item mt-4">
-                            <a class="nav-link rounded" href="#settings" onclick="showSection('settings')">
+                            <a class="nav-link rounded" href="#settings" onclick="showSection('settings', event)">
                                 <i class="fas fa-cog me-2"></i> <span class="nav-text">Settings</span>
                             </a>
                         </li>
@@ -424,10 +441,14 @@
                                                     </div>
                                                 </div>
                                                 <div class="col-md-6">
-                                                    <label class="form-label fw-semibold text-secondary small">Current Plan</label>
+                                                    <label class="form-label fw-semibold text-secondary small">Subscription / Service Plan</label>
                                                     <div class="input-group">
                                                         <span class="input-group-text bg-light border-end-0"><i class="fas fa-box text-muted"></i></span>
-                                                        <input type="text" class="form-control border-start-0 bg-light" id="profile-plan" readonly style="background-color: #f8f9fa !important; cursor: not-allowed;">
+                                                        <select class="form-select border-start-0 fw-semibold text-dark" id="profile-plan">
+                                                            <option value="Pay Per Pickup ($5.00)">📦 Pay Per Pickup ($5/Pickup)</option>
+                                                            <option value="Monthly Subscription ($15.00)">🗓️ Monthly Subscription ($15/Month)</option>
+                                                            <option value="Commercial Plan ($45.00)">🏢 Commercial Plan ($45.00)</option>
+                                                        </select>
                                                     </div>
                                                 </div>
                                                 <div class="col-12">
@@ -518,7 +539,7 @@
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
-                        <div class="mb-3">
+                        <div class="mb-3" id="req-plan-container">
                             <label class="form-label text-muted fw-semibold">Subscription / Service Plan</label>
                             <div class="input-group">
                                 <span class="input-group-text bg-white text-muted border-end-0"><i class="fas fa-box"></i></span>
@@ -527,6 +548,15 @@
                                     <option value="Monthly Subscription ($15.00)">🗓️ Monthly Subscription ($15/Month)</option>
                                     <option value="Commercial Plan ($45.00)">🏢 Commercial Plan ($45.00)</option>
                                 </select>
+                            </div>
+                        </div>
+                        <div id="req-active-plan-banner" class="d-none alert alert-success p-3 rounded-3 mb-3 shadow-sm border-0 bg-success-subtle">
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-check-circle fs-3 me-3 text-success"></i>
+                                <div>
+                                    <strong class="d-block text-success fw-bold fs-6" id="banner-plan-title">🗓️ Active Plan: Monthly Subscription ($15.00)</strong>
+                                    <small class="text-secondary fw-semibold"><i class="fas fa-gift me-1 text-success"></i> Covered under your active monthly plan ($0.00 fee). No payment needed!</small>
+                                </div>
                             </div>
                         </div>
                         <div class="mb-3">
@@ -718,8 +748,24 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
-    <script src="../js/api.js?v=99000060"></script>
-    <script src="app.js?v=99000060"></script>
+    <script src="../js/api.js?v=99000100"></script>
+    <script src="app.js?v=99000100"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const mId = urlParams.get('openModal');
+            if (mId) {
+                setTimeout(() => {
+                    const el = document.getElementById(mId);
+                    if (el) {
+                        el.classList.add('show');
+                        el.style.display = 'block';
+                        document.body.classList.add('modal-open');
+                    }
+                }, 1000);
+            }
+        });
+    </script>
 </body>
 </html>
 

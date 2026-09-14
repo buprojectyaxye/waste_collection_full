@@ -56,46 +56,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             sendResponse('error', 'Job Status and Request ID are required', null, 400);
         }
 
-        if ($job_status === 'Rejected') {
-            sendResponse('error', 'Drivers cannot reject assigned jobs. Please accept and complete the collection.', null, 400);
+        if (in_array($job_status, ['Cancelled', 'Rejected', 'Failed'])) {
+            sendResponse('error', 'Drivers are not permitted to cancel pickup requests. Drivers can only accept and complete assigned requests.', null, 403);
         }
 
         try {
             $conn->beginTransaction();
 
-            // Atomic Check: If accepting, verify no other driver claimed this request first
-            if ($job_status === 'Accepted') {
-                $checkClaim = $conn->prepare("SELECT request_id, driver_id, status, area FROM waste_requests WHERE request_id = ? FOR UPDATE");
-                $checkClaim->execute([$request_id]);
-                $currentReq = $checkClaim->fetch(PDO::FETCH_ASSOC);
+            // Fetch current request details
+            $checkClaim = $conn->prepare("SELECT request_id, resident_id, driver_id, status, area FROM waste_requests WHERE request_id = ? FOR UPDATE");
+            $checkClaim->execute([$request_id]);
+            $currentReq = $checkClaim->fetch(PDO::FETCH_ASSOC);
 
-                if (!$currentReq) {
-                    $conn->rollBack();
-                    sendResponse('error', 'Request not found', null, 404);
-                }
-
-                if (!empty($currentReq['driver_id']) && (int)$currentReq['driver_id'] !== (int)$driver_id) {
-                    $conn->rollBack();
-                    $otherDrvStmt = $conn->prepare("SELECT name, vehicle_plate FROM drivers WHERE driver_id = ?");
-                    $otherDrvStmt->execute([$currentReq['driver_id']]);
-                    $otherDrv = $otherDrvStmt->fetch(PDO::FETCH_ASSOC);
-                    $otherName = $otherDrv ? $otherDrv['name'] : 'another driver';
-
-                    sendResponse('already_accepted', "Already accepted by $otherName.", [
-                        'accepted_by_other' => true,
-                        'accepted_by_name' => $otherName,
-                        'request_id' => $request_id
-                    ], 409);
-                }
+            if (!$currentReq) {
+                $conn->rollBack();
+                sendResponse('error', 'Request not found', null, 404);
             }
 
+            // Strict Atomic Check: If request is already assigned to a driver, ONLY that assigned driver can accept/start/complete it
+            if (!empty($currentReq['driver_id']) && (int)$currentReq['driver_id'] !== (int)$driver_id) {
+                $conn->rollBack();
+                $otherDrvStmt = $conn->prepare("SELECT name, vehicle_plate FROM drivers WHERE driver_id = ?");
+                $otherDrvStmt->execute([$currentReq['driver_id']]);
+                $otherDrv = $otherDrvStmt->fetch(PDO::FETCH_ASSOC);
+                $otherName = $otherDrv ? $otherDrv['name'] : 'another driver';
+
+                sendResponse('already_accepted', "This pickup request is assigned to driver $otherName. You cannot modify requests assigned to another driver.", [
+                    'accepted_by_other' => true,
+                    'accepted_by_name' => $otherName,
+                    'request_id' => $request_id
+                ], 409);
+            }
+
+            $target_driver_id = !empty($currentReq['driver_id']) ? (int)$currentReq['driver_id'] : (int)$driver_id;
+
             if (!$assignment_id) {
-                $stmtFindAss = $conn->prepare("SELECT assignment_id FROM assignments WHERE request_id = ? AND driver_id = ? ORDER BY assignment_id DESC LIMIT 1");
-                $stmtFindAss->execute([$request_id, $driver_id]);
+                $stmtFindAss = $conn->prepare("SELECT assignment_id FROM assignments WHERE request_id = ? AND (driver_id = ? OR driver_id = ?) ORDER BY assignment_id DESC LIMIT 1");
+                $stmtFindAss->execute([$request_id, $driver_id, $target_driver_id]);
                 $assignment_id = $stmtFindAss->fetchColumn();
                 if (!$assignment_id) {
                     $stmtNewAss = $conn->prepare("INSERT INTO assignments (request_id, driver_id, status, assigned_time) VALUES (?, ?, 'Assigned', NOW())");
-                    $stmtNewAss->execute([$request_id, $driver_id]);
+                    $stmtNewAss->execute([$request_id, $target_driver_id]);
                     $assignment_id = $conn->lastInsertId();
                 }
             }
@@ -107,40 +108,80 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // Update assignment
             if ($completed_time) {
-                $stmt = $conn->prepare("UPDATE assignments SET status = ?, completed_time = ? WHERE (assignment_id = ? OR request_id = ?) AND (driver_id = ? OR driver_id IS NULL)");
-                $stmt->execute([$job_status, $completed_time, $assignment_id, $request_id, $driver_id]);
+                $stmt = $conn->prepare("UPDATE assignments SET status = ?, completed_time = ? WHERE (assignment_id = ? OR request_id = ?) AND (driver_id = ? OR driver_id = ? OR driver_id IS NULL)");
+                $stmt->execute([$job_status, $completed_time, $assignment_id, $request_id, $driver_id, $target_driver_id]);
             } else {
-                $stmt = $conn->prepare("UPDATE assignments SET status = ? WHERE (assignment_id = ? OR request_id = ?) AND (driver_id = ? OR driver_id IS NULL)");
-                $stmt->execute([$job_status, $assignment_id, $request_id, $driver_id]);
+                $stmt = $conn->prepare("UPDATE assignments SET status = ? WHERE (assignment_id = ? OR request_id = ?) AND (driver_id = ? OR driver_id = ? OR driver_id IS NULL)");
+                $stmt->execute([$job_status, $assignment_id, $request_id, $driver_id, $target_driver_id]);
             }
 
             $request_status_map = [
                 'Accepted' => 'Accepted',
                 'In Progress' => 'In Progress',
                 'Completed' => 'Completed',
-                'Failed' => 'Pending'
+                'Failed' => 'Pending',
+                'Cancelled' => 'Cancelled',
+                'Rejected' => 'Cancelled'
             ];
             
             $req_status = $request_status_map[$job_status] ?? $job_status;
-            $stmtReq = $conn->prepare("UPDATE waste_requests SET status = ?, driver_id = ? WHERE request_id = ?");
-            $stmtReq->execute([$req_status, $driver_id, $request_id]);
+            
+            if ($job_status === 'Cancelled' || $job_status === 'Rejected') {
+                $stmtReq = $conn->prepare("UPDATE waste_requests SET status = 'Cancelled', driver_id = NULL WHERE request_id = ?");
+                $stmtReq->execute([$request_id]);
+            } else {
+                $stmtReq = $conn->prepare("UPDATE waste_requests SET status = ?, driver_id = ? WHERE request_id = ?");
+                $stmtReq->execute([$req_status, $target_driver_id, $request_id]);
+            }
 
-            // Add system log and notification to Admin
+            // Add system log and notification to Admin & Resident
             $driverName = $_SESSION['name'] ?? 'Driver';
             $stmtDrvInfo = $conn->prepare("SELECT name, vehicle_plate FROM drivers WHERE driver_id = ?");
-            $stmtDrvInfo->execute([$driver_id]);
+            $stmtDrvInfo->execute([$target_driver_id]);
             $drvRow = $stmtDrvInfo->fetch(PDO::FETCH_ASSOC);
             if ($drvRow && !empty($drvRow['name'])) $driverName = $drvRow['name'];
             $plateStr = !empty($drvRow['vehicle_plate']) ? " (" . $drvRow['vehicle_plate'] . ")" : "";
 
-            $logMsg = "Driver {$driverName}{$plateStr} updated status to: $job_status for Request #$request_id";
-            $stmtLog = $conn->prepare("INSERT INTO request_logs (request_id, action, message) VALUES (?, 'Status Update', ?)");
-            $stmtLog->execute([$request_id, $logMsg]);
+            if ($job_status === 'In Progress') {
+                $logMsg = "Driver {$driverName}{$plateStr} started trip to pickup location (In Progress).";
+            } elseif ($job_status === 'Accepted') {
+                $logMsg = "Driver {$driverName}{$plateStr} accepted pickup request.";
+            } elseif ($job_status === 'Completed') {
+                $logMsg = "Waste collection completed by driver {$driverName}{$plateStr}.";
+            } elseif ($job_status === 'Cancelled' || $job_status === 'Rejected') {
+                $logMsg = "Driver {$driverName}{$plateStr} cancelled/rejected assigned pickup request.";
+            } else {
+                $logMsg = "Driver {$driverName}{$plateStr} updated status to: $job_status";
+            }
+
+            $logAction = ($job_status === 'Cancelled' || $job_status === 'Rejected') ? 'Cancelled' : 'Status Update';
+            $stmtLog = $conn->prepare("INSERT INTO request_logs (request_id, action, message) VALUES (?, ?, ?)");
+            $stmtLog->execute([$request_id, $logAction, $logMsg]);
 
             if ($job_status === 'Accepted') {
                 try {
                     $notifAdmin = $conn->prepare("INSERT INTO notifications (user_type, user_id, title, message) VALUES ('Admin', 1, 'Job Accepted by Driver', ?)");
                     $notifAdmin->execute(["Driver {$driverName}{$plateStr} has officially accepted Pickup Request #$request_id."]);
+                } catch (Exception $exN) {}
+            } elseif ($job_status === 'In Progress') {
+                try {
+                    $resId = $currentReq['resident_id'] ?? null;
+                    if ($resId) {
+                        $notifRes = $conn->prepare("INSERT INTO notifications (user_type, user_id, title, message) VALUES ('Resident', ?, 'Driver En Route', ?)");
+                        $notifRes->execute([$resId, "Driver {$driverName} has started the trip and is en route to collect your waste (In Progress)."]);
+                    }
+                    $notifAdmin = $conn->prepare("INSERT INTO notifications (user_type, user_id, title, message) VALUES ('Admin', 1, 'Driver En Route', ?)");
+                    $notifAdmin->execute(["Driver {$driverName}{$plateStr} started trip for Request #$request_id (In Progress)."]);
+                } catch (Exception $exN) {}
+            } elseif ($job_status === 'Cancelled' || $job_status === 'Rejected') {
+                try {
+                    $resId = $currentReq['resident_id'] ?? null;
+                    if ($resId) {
+                        $notifRes = $conn->prepare("INSERT INTO notifications (user_type, user_id, title, message) VALUES ('Resident', ?, 'Pickup Request Cancelled', ?)");
+                        $notifRes->execute([$resId, "Driver {$driverName} has cancelled assigned Pickup Request #$request_id."]);
+                    }
+                    $notifAdmin = $conn->prepare("INSERT INTO notifications (user_type, user_id, title, message) VALUES ('Admin', 1, 'Job Cancelled by Driver', ?)");
+                    $notifAdmin->execute(["Driver {$driverName}{$plateStr} cancelled assigned Pickup Request #$request_id."]);
                 } catch (Exception $exN) {}
             }
 
@@ -182,31 +223,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     COALESCE(a.assignment_id, r.request_id) as assignment_id,
                     r.request_id,
                     r.resident_id,
-                    COALESCE(r.driver_id, a.driver_id) as driver_id,
+                    r.driver_id,
                     r.address,
                     r.waste_type,
                     r.priority,
                     r.area,
                     r.request_time,
-                    COALESCE(a.status, r.status) as status,
+                    r.status,
                     COALESCE(res.name, CONCAT('Resident #', r.resident_id)) as resident_name,
                     COALESCE(res.phone, 'N/A') as resident_phone
                 FROM waste_requests r
                 LEFT JOIN residents res ON r.resident_id = res.resident_id
-                LEFT JOIN (
-                    SELECT request_id, MAX(assignment_id) as max_id
-                    FROM assignments
-                    GROUP BY request_id
-                ) latest_a ON r.request_id = latest_a.request_id
-                LEFT JOIN assignments a ON latest_a.max_id = a.assignment_id
+                LEFT JOIN assignments a ON r.request_id = a.request_id AND a.driver_id = r.driver_id
                 WHERE (
-                    r.driver_id = ? OR a.driver_id = ? OR (r.driver_id IS NULL AND r.status = 'Pending' AND (? != '' AND (r.area LIKE ? OR r.address LIKE ?)))
+                    r.driver_id = ? OR (r.driver_id IS NULL AND r.status = 'Pending' AND (? != '' AND (r.area LIKE ? OR r.address LIKE ?)))
                 )
                   AND r.status IN ('Assigned', 'Pending', 'Accepted', 'In Progress')
                   AND (r.payment_status IN ('Paid', 'Completed') OR (SELECT COUNT(*) FROM payments p WHERE p.request_id = r.request_id AND p.status = 'Completed') > 0)
                 ORDER BY r.request_time DESC
             ");
-            $stmt->execute([$driver_id, $driver_id, $driverZone, "%$driverZone%", "%$driverZone%"]);
+            $stmt->execute([$driver_id, $driverZone, "%$driverZone%", "%$driverZone%"]);
             sendResponse('success', 'Current jobs fetched', $stmt->fetchAll());
         } catch (PDOException $e) {
             sendResponse('error', 'Database error: ' . $e->getMessage(), null, 500);
@@ -217,32 +253,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $fromDate = $_GET['from_date'] ?? $data['from_date'] ?? null;
             $toDate = $_GET['to_date'] ?? $data['to_date'] ?? null;
 
+            // Fetch driver rate per pickup ($0.50 - $5.00)
+            $drvRateStmt = $conn->prepare("SELECT COALESCE(earning_per_pickup, 1.50) FROM drivers WHERE driver_id = ?");
+            $drvRateStmt->execute([$driver_id]);
+            $earningRate = floatval($drvRateStmt->fetchColumn() ?: 1.50);
+
             // Real Summary Stats Query for Driver
             $statsStmt = $conn->prepare("
                 SELECT 
                     COUNT(DISTINCT r.request_id) as completed_jobs,
-                    COUNT(DISTINCT CASE WHEN DATE(COALESCE(a.completed_time, a.assigned_time, r.request_time)) = CURDATE() THEN r.request_id END) as todays_jobs,
-                    COALESCE(COUNT(DISTINCT r.request_id) * 25, 0) as total_waste,
-                    COALESCE(COUNT(DISTINCT r.request_id) * 15.00, 0) as total_earnings
+                    COUNT(DISTINCT CASE WHEN DATE(COALESCE(a.completed_time, r.request_time)) = CURDATE() THEN r.request_id END) as todays_jobs,
+                    COALESCE(COUNT(DISTINCT r.request_id) * 25, 0) as total_waste
                 FROM waste_requests r
-                LEFT JOIN assignments a ON r.request_id = a.request_id
-                WHERE (r.driver_id = ? OR a.driver_id = ?)
+                LEFT JOIN assignments a ON r.request_id = a.request_id AND a.driver_id = r.driver_id
+                WHERE r.driver_id = ?
+                  AND r.status = 'Completed'
                   AND (r.payment_status IN ('Paid', 'Completed') OR (SELECT COUNT(*) FROM payments p WHERE p.request_id = r.request_id AND p.status = 'Completed') > 0)
-                  AND (r.status = 'Completed' OR a.status = 'Completed')
             ");
-            $statsStmt->execute([$driver_id, $driver_id]);
-            $stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
+            $statsStmt->execute([$driver_id]);
+            $stats = $statsStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+
+            $completedCount = (int)($stats['completed_jobs'] ?? 0);
+            $stats['earning_per_pickup'] = number_format($earningRate, 2);
+            $stats['total_earnings'] = number_format($completedCount * $earningRate, 2);
 
             // Real History Records Query for Driver
             $sql = "
                 SELECT 
                     COALESCE(a.assignment_id, r.request_id) as assignment_id,
                     r.request_id,
-                    COALESCE(r.driver_id, a.driver_id) as driver_id,
+                    r.driver_id,
                     COALESCE(a.assigned_time, r.request_time) as assigned_time,
                     COALESCE(a.assigned_time, r.request_time) as started_time,
                     COALESCE(a.completed_time, r.request_time) as completed_time,
-                    COALESCE(a.status, r.status) as status,
+                    r.status,
                     r.waste_type,
                     COALESCE(a.weight_kg, 25.0) as weight_kg,
                     5 as rating,
@@ -253,18 +297,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     COALESCE(res.phone, 'N/A') as customer_phone
                 FROM waste_requests r
                 LEFT JOIN residents res ON r.resident_id = res.resident_id
-                LEFT JOIN (
-                    SELECT request_id, MAX(assignment_id) as max_id
-                    FROM assignments
-                    GROUP BY request_id
-                ) latest_a ON r.request_id = latest_a.request_id
-                LEFT JOIN assignments a ON latest_a.max_id = a.assignment_id
-                WHERE (r.driver_id = ? OR a.driver_id = ?)
-                  AND (r.status = 'Completed' OR a.status = 'Completed')
+                LEFT JOIN assignments a ON r.request_id = a.request_id AND a.driver_id = r.driver_id
+                WHERE r.driver_id = ?
+                  AND r.status = 'Completed'
                   AND (r.payment_status IN ('Paid', 'Completed') OR (SELECT COUNT(*) FROM payments p WHERE p.request_id = r.request_id AND p.status = 'Completed') > 0)
             ";
 
-            $params = [$driver_id, $driver_id];
+            $params = [$driver_id];
 
             if (!empty($fromDate)) {
                 $sql .= " AND DATE(COALESCE(a.completed_time, a.assigned_time, r.request_time)) >= ?";
@@ -291,7 +330,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     elseif ($action === 'get_profile') {
         try {
-            $stmt = $conn->prepare("SELECT name, email, phone, vehicle_plate, profile_picture, status FROM drivers WHERE driver_id = ?");
+            $stmt = $conn->prepare("SELECT name, email, phone, vehicle_plate, zone, COALESCE(earning_per_pickup, 1.50) as earning_per_pickup, profile_picture, status FROM drivers WHERE driver_id = ?");
             $stmt->execute([$driver_id]);
             sendResponse('success', 'Profile fetched', $stmt->fetch());
         } catch (PDOException $e) {
@@ -396,7 +435,16 @@ elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'update_password') 
         $stmt->execute([$driver_id]);
         $driver = $stmt->fetch();
         
-        if (!password_verify($current_password, $driver['password']) && !in_array($current_password, ['password', 'password123', '1234', '123456'])) {
+        $isValid = false;
+        if ($driver && !empty($driver['password'])) {
+            if (password_verify($current_password, $driver['password'])) {
+                $isValid = true;
+            } elseif ($current_password === $driver['password']) {
+                $isValid = true;
+            }
+        }
+        
+        if (!$isValid) {
             sendResponse('error', 'Incorrect current password', null, 400);
         }
         

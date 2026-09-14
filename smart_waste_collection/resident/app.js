@@ -4,7 +4,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if(res.data.type !== 'resident') {
             window.location.href = 'login.html';
         } else {
-            document.getElementById('user-name').innerText = res.data.name;
+            const userNameEl = document.getElementById('user-name');
+            if (userNameEl) userNameEl.innerText = res.data.name;
+            const navNameEl = document.getElementById('nav-resident-name');
+            if (navNameEl) navNameEl.innerText = res.data.name;
             loadDashboard();
             
             // Load profile picture & subscription plan for navbar and modals
@@ -12,13 +15,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (profileRes && profileRes.data) {
                     window.currentUserProfile = profileRes.data;
                     localStorage.setItem('resident', JSON.stringify(profileRes.data));
+                    if (profileRes.data.name) {
+                        if (userNameEl) userNameEl.innerText = profileRes.data.name;
+                        if (navNameEl) navNameEl.innerText = profileRes.data.name;
+                    }
                     syncResidentActivePlan(profileRes.data);
                     if(profileRes.data.profile_picture) {
                         const navPic = document.getElementById('nav-profile-pic');
                         const navIcon = document.getElementById('nav-profile-icon');
-                        navPic.src = '../' + profileRes.data.profile_picture;
-                        navPic.classList.remove('d-none');
-                        navIcon.classList.add('d-none');
+                        if (navPic) {
+                            navPic.src = profileRes.data.profile_picture.startsWith('http') || profileRes.data.profile_picture.startsWith('data:') ? profileRes.data.profile_picture : '../' + profileRes.data.profile_picture;
+                            navPic.classList.remove('d-none');
+                        }
+                        if (navIcon) navIcon.classList.add('d-none');
                     }
                 }
             }).catch(e => console.error(e));
@@ -57,15 +66,51 @@ function syncResidentActivePlan(profile) {
         } catch (e) { profile = {}; }
     }
     const plan = profile.subscription_plan || '';
-    const selectEl = document.getElementById('req-plan');
-    if (!selectEl) return;
 
-    if (plan.includes('45') || plan.toLowerCase().includes('commercial')) {
-        selectEl.value = 'Commercial Plan ($45.00)';
-    } else if (plan.includes('15') || plan.toLowerCase().includes('monthly')) {
-        selectEl.value = 'Monthly Subscription ($15.00)';
-    } else if (plan.includes('5') || plan.toLowerCase().includes('pickup')) {
-        selectEl.value = 'Pay Per Pickup ($5.00)';
+    // Sync Settings dropdown
+    const profilePlanEl = document.getElementById('profile-plan');
+    if (profilePlanEl) {
+        if (plan.includes('45') || plan.toLowerCase().includes('commercial')) {
+            profilePlanEl.value = 'Commercial Plan ($45.00)';
+        } else if (plan.includes('15') || plan.toLowerCase().includes('monthly')) {
+            profilePlanEl.value = 'Monthly Subscription ($15.00)';
+        } else {
+            profilePlanEl.value = 'Pay Per Pickup ($5.00)';
+        }
+    }
+
+    // Sync Modal UI
+    const selectEl = document.getElementById('req-plan');
+    const planContainer = document.getElementById('req-plan-container');
+    const activeBanner = document.getElementById('req-active-plan-banner');
+    const bannerTitle = document.getElementById('banner-plan-title');
+
+    const isMonthly = (plan.includes('15') || plan.toLowerCase().includes('monthly') || plan.includes('45') || plan.toLowerCase().includes('commercial'));
+
+    if (isMonthly) {
+        // Hide option chooser container so resident is NOT asked to choose an option!
+        if (planContainer) planContainer.classList.add('d-none');
+        if (activeBanner) activeBanner.classList.remove('d-none');
+        
+        if (bannerTitle) {
+            if (plan.includes('45') || plan.toLowerCase().includes('commercial')) {
+                bannerTitle.innerText = '🏢 Active Plan: Commercial Plan ($45.00)';
+            } else {
+                bannerTitle.innerText = '🗓️ Active Plan: Monthly Subscription ($15.00)';
+            }
+        }
+        if (selectEl) {
+            if (plan.includes('45') || plan.toLowerCase().includes('commercial')) {
+                selectEl.value = 'Commercial Plan ($45.00)';
+            } else {
+                selectEl.value = 'Monthly Subscription ($15.00)';
+            }
+        }
+    } else {
+        // Show option chooser container for pay-per-pickup residents
+        if (planContainer) planContainer.classList.remove('d-none');
+        if (activeBanner) activeBanner.classList.add('d-none');
+        if (selectEl) selectEl.value = 'Pay Per Pickup ($5.00)';
     }
 }
 
@@ -169,37 +214,149 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-async function showSection(sectionId) {
-    if (window.innerWidth < 768) {
-        const sidebar = document.getElementById('sidebar') || document.querySelector('.sidebar');
-        const sidebarOverlay = document.getElementById('sidebarOverlay');
-        if (sidebar) sidebar.classList.remove('show-mobile', 'expanded', 'show', 'active');
-        if (sidebarOverlay) sidebarOverlay.classList.remove('active', 'show');
+async function showSection(sectionId, event = null) {
+    if (typeof sectionId === 'object' && sectionId !== null) {
+        event = sectionId;
+        const target = event.currentTarget || event.target;
+        const href = target ? (target.getAttribute('href') || target.closest('a')?.getAttribute('href')) : null;
+        sectionId = href ? href.replace('#', '') : 'dashboard';
     }
+    if (event && typeof event.preventDefault === 'function') {
+        event.preventDefault();
+        if (typeof event.stopPropagation === 'function') event.stopPropagation();
+    }
+    if (!sectionId || typeof sectionId !== 'string') return;
 
-    document.querySelectorAll('.section-container').forEach(el => el.classList.add('d-none'));
-    document.querySelectorAll('.sidebar .nav-link').forEach(el => el.classList.remove('active'));
-    
-    document.getElementById(`${sectionId}-section`).classList.remove('d-none');
-    document.querySelector(`a[href="#${sectionId}"]`).classList.add('active');
+    try {
+        if (window.innerWidth < 992) {
+            const sidebar = document.getElementById('sidebar') || document.querySelector('.sidebar');
+            const sidebarOverlay = document.getElementById('sidebarOverlay');
+            if (sidebar) sidebar.classList.remove('show-mobile', 'expanded', 'show', 'active');
+            if (sidebarOverlay) sidebarOverlay.classList.remove('active', 'show');
+        }
 
-    if(sectionId === 'dashboard') loadDashboard();
-    if(sectionId === 'requests') loadRequests();
-    if(sectionId === 'payments') loadPayments();
-    if(sectionId === 'settings') loadSettings();
+        // Hide all section containers
+        document.querySelectorAll('.section-container').forEach(el => {
+            el.classList.add('d-none');
+            el.style.display = 'none';
+        });
+
+        // Deactivate all sidebar nav links
+        document.querySelectorAll('.sidebar .nav-link').forEach(el => el.classList.remove('active'));
+        
+        // Show target section
+        const targetSec = document.getElementById(`${sectionId}-section`);
+        if (targetSec) {
+            targetSec.classList.remove('d-none');
+            targetSec.style.display = 'block';
+        }
+
+        // Activate corresponding nav links
+        const navLinks = document.querySelectorAll(`a[href="#${sectionId}"]`);
+        navLinks.forEach(link => link.classList.add('active'));
+
+        // Update URL hash
+        if (window.location.hash !== '#' + sectionId) {
+            history.pushState(null, null, '#' + sectionId);
+        }
+
+        if (sectionId === 'dashboard') try { await loadDashboard(); } catch(e) { console.error(e); }
+        if (sectionId === 'requests') try { await loadRequests(); } catch(e) { console.error(e); }
+        if (sectionId === 'payments') try { await loadPayments(); } catch(e) { console.error(e); }
+        if (sectionId === 'settings') try { await loadSettings(); } catch(e) { console.error(e); }
+    } catch (e) {
+        console.error('Error in showSection:', e);
+    }
 }
+window.showSection = showSection;
+
+function handleHashNavigation() {
+    let hash = window.location.hash.replace('#', '').trim();
+    if (!hash || hash === 'index' || hash === 'login') {
+        hash = 'dashboard';
+    }
+    showSection(hash);
+}
+window.addEventListener('hashchange', handleHashNavigation);
+
+async function loadSettings() {
+    try {
+        const res = await apiCall('/auth.php?action=check_session');
+        if (res && res.data) {
+            const u = res.data;
+            window.currentUserProfile = u;
+            const pName = document.getElementById('profile-name');
+            const pEmail = document.getElementById('profile-email');
+            const pPhone = document.getElementById('profile-phone');
+            const pAddress = document.getElementById('profile-address');
+            const pPlan = document.getElementById('profile-plan');
+            const pPic = document.getElementById('profile-preview');
+
+            if (pName) pName.value = u.name || '';
+            if (pEmail) pEmail.value = u.email || '';
+            if (pPhone) pPhone.value = u.phone || '';
+            if (pAddress) pAddress.value = u.address || '';
+            if (pPlan) pPlan.value = u.subscription_plan || u.plan || 'Pay Per Pickup ($5.00)';
+            if (pPic && u.profile_picture) pPic.src = u.profile_picture;
+        }
+    } catch (err) {
+        console.error('Error loading resident settings:', err);
+    }
+}
+window.loadSettings = loadSettings;
+
+function renderResidentHeaderNotifications(notifData) {
+    const headerList = document.getElementById('resNotifHeaderList');
+    const badge = document.getElementById('resNotifBadge');
+    const countEl = document.getElementById('resNotifCount');
+    
+    if (!headerList) return;
+    
+    const notifs = Array.isArray(notifData) ? notifData : [];
+    headerList.innerHTML = '';
+    
+    if (notifs.length === 0) {
+        headerList.innerHTML = '<div class="p-3 text-center text-muted small"><i class="fas fa-bell-slash text-secondary mb-1 d-block fs-5"></i> Wax notification ah maku jiraan.</div>';
+        if (badge) badge.style.display = 'none';
+        if (countEl) countEl.innerText = '0 New';
+    } else {
+        if (badge) {
+            badge.innerText = notifs.length;
+            badge.style.display = 'inline-block';
+        }
+        if (countEl) countEl.innerText = `${notifs.length} New`;
+        
+        notifs.forEach(notif => {
+            const formattedBody = formatMessageWithContext(notif.message);
+            const timeStr = notif.created_at ? new Date(notif.created_at).toLocaleString([], {month: 'numeric', day: 'numeric', hour: '2-digit', minute:'2-digit'}) : '';
+            headerList.innerHTML += `
+                <div class="list-group-item p-3 border-bottom bg-white">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <strong class="text-success fw-bold" style="font-size: 13px;"><i class="fas fa-bell me-1"></i> ${notif.title || 'Notification'}</strong>
+                        <small class="text-muted" style="font-size: 10px;">${timeStr}</small>
+                    </div>
+                    <div class="text-dark" style="font-size: 12px; line-height: 1.4;">${formattedBody}</div>
+                </div>
+            `;
+        });
+    }
+}
+window.renderResidentHeaderNotifications = renderResidentHeaderNotifications;
 
 async function loadDashboard() {
     try {
         // Fetch real notifications
         const res = await apiCall('/resident.php?action=get_notifications');
+        const notifs = (res && res.data) ? res.data : [];
+        renderResidentHeaderNotifications(notifs);
+
         const list = document.getElementById('notifications-list');
         if (list) {
             list.innerHTML = '';
-            if (!res.data || res.data.length === 0) {
+            if (notifs.length === 0) {
                 list.innerHTML = '<li class="list-group-item text-muted">No new notifications.</li>';
             } else {
-                res.data.forEach(notif => {
+                notifs.forEach(notif => {
                     const formattedBody = formatMessageWithContext(notif.message);
                     list.innerHTML += `
                         <li class="list-group-item d-flex justify-content-between align-items-start notification-card p-3 rounded mb-2 shadow-sm border-0 bg-white">
@@ -270,7 +427,49 @@ document.getElementById('newRequestForm')?.addEventListener('submit', async (e) 
         return;
     }
 
-    // Determine plan amount
+    const regPlan = profile.subscription_plan || '';
+    const isAlreadyMonthly = (regPlan.includes('15') || regPlan.toLowerCase().includes('monthly') || regPlan.includes('45') || regPlan.toLowerCase().includes('commercial'));
+    const isChoosingMonthly = (chosenPlan.includes('15') || chosenPlan.toLowerCase().includes('monthly') || chosenPlan.includes('45') || chosenPlan.toLowerCase().includes('commercial'));
+
+    // Hide newRequestModal
+    const reqModalEl = document.getElementById('newRequestModal');
+    if (reqModalEl) {
+        const reqModal = bootstrap.Modal.getInstance(reqModalEl) || new bootstrap.Modal(reqModalEl);
+        reqModal.hide();
+    }
+
+    // Check if resident is already on active monthly/commercial plan or selecting their active monthly plan
+    if (isAlreadyMonthly || (isChoosingMonthly && chosenPlan === regPlan)) {
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        if (submitBtn) submitBtn.disabled = true;
+
+        try {
+            const payPayload = {
+                amount: 0.00,
+                method: 'Monthly Subscription',
+                request_time: reqTime,
+                address: reqAddress,
+                notes: reqNotes,
+                plan: regPlan || chosenPlan
+            };
+
+            const res = await apiCall('/resident.php?action=create_and_pay_request', 'POST', payPayload);
+            e.target.reset();
+
+            alert('🎉 Pickup Request Scheduled Successfully!\nYour pickup request is covered under your active Monthly Subscription ($0.00 fee).');
+            showSection('requests');
+            loadDashboard();
+            loadRequests();
+            loadPayments();
+        } catch (err) {
+            alert(err.message || 'Error scheduling pickup request.');
+        } finally {
+            if (submitBtn) submitBtn.disabled = false;
+        }
+        return;
+    }
+
+    // Determine plan amount for non-monthly users or new monthly subscription signups
     let amt = 5.00;
     if (chosenPlan.includes('45') || chosenPlan.toLowerCase().includes('commercial')) {
         amt = 45.00;
@@ -289,12 +488,6 @@ document.getElementById('newRequestForm')?.addEventListener('submit', async (e) 
         amount: amt
     };
 
-    // Hide newRequestModal
-    const reqModalEl = document.getElementById('newRequestModal');
-    if (reqModalEl) {
-        const reqModal = bootstrap.Modal.getInstance(reqModalEl) || new bootstrap.Modal(reqModalEl);
-        reqModal.hide();
-    }
     e.target.reset();
 
     // Auto-fill Payment Modal with chosen plan, amount, and resident phone number
@@ -359,7 +552,8 @@ function renderRequests() {
         const badgeClass = req.status === 'Pending' ? 'bg-warning text-dark' : 
                          (req.status === 'Assigned' ? 'bg-info text-white' : 
                          (req.status === 'Accepted' ? 'bg-primary text-white' : 
-                         (req.status === 'In Progress' ? 'bg-dark text-white' : 'bg-success text-white')));
+                         (req.status === 'In Progress' ? 'text-white' : 'bg-success text-white')));
+        const badgeStyle = req.status === 'In Progress' ? 'background-color: #6f42c1 !important; color: white;' : '';
         
         const isPaid = (req.payment_status === 'Paid' || req.payment_status === 'Completed' || (req.logs && req.logs.some(l => l.action === 'Payment Received')));
         const payBadgeHtml = isPaid 
@@ -398,7 +592,7 @@ function renderRequests() {
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h5 class="card-title mb-0 fw-bold">Request #${req.request_id}</h5>
                         <div>
-                            <span class="badge ${badgeClass} fw-bold" style="border-radius: 20px; padding: 6px 12px;">${req.status}</span>
+                            <span class="badge ${badgeClass} fw-bold" style="border-radius: 20px; padding: 6px 12px; ${badgeStyle}">${req.status}</span>
                             ${payBadgeHtml}
                         </div>
                     </div>
@@ -559,6 +753,16 @@ async function processPayment(amount, method) {
         
         await apiCall('/resident.php?action=create_and_pay_request', 'POST', payPayload);
         window.pendingPickupData = null;
+        
+        // Refresh user profile after payment so frontend immediately knows resident is on Monthly Subscription
+        try {
+            const profRes = await apiCall('/resident.php?action=get_profile');
+            if (profRes && profRes.data) {
+                window.currentUserProfile = profRes.data;
+                localStorage.setItem('resident', JSON.stringify(profRes.data));
+                syncResidentActivePlan(profRes.data);
+            }
+        } catch (eProf) {}
         
         setTimeout(() => {
             alert(method === 'Mobile Money' ? `🎉 EVC Plus Payment Successful!\n$${parseFloat(amount).toFixed(2)} has been paid for your waste collection request.` : `🎉 Payment of $${parseFloat(amount).toFixed(2)} via ${method} successful!`);
@@ -909,6 +1113,10 @@ async function loadSettings() {
             window.currentUserProfile = profile;
             localStorage.setItem('resident', JSON.stringify(profile));
 
+            if (profile.name) {
+                const navNameEl = document.getElementById('nav-resident-name');
+                if (navNameEl) navNameEl.innerText = profile.name;
+            }
             if (document.getElementById('profile-name')) document.getElementById('profile-name').value = profile.name || '';
             if (document.getElementById('profile-email')) document.getElementById('profile-email').value = profile.email || '';
             if (document.getElementById('profile-phone')) document.getElementById('profile-phone').value = profile.phone || '';
@@ -990,24 +1198,30 @@ async function updateResidentProfile(e) {
         const name = document.getElementById('profile-name')?.value.trim();
         const phone = document.getElementById('profile-phone')?.value.trim();
         const address = document.getElementById('profile-address')?.value.trim();
+        const subscription_plan = document.getElementById('profile-plan')?.value || 'Pay Per Pickup ($5.00)';
 
         const res = await apiCall('/resident.php?action=update_profile', 'POST', {
             name: name,
             phone: phone,
-            address: address
+            address: address,
+            subscription_plan: subscription_plan
         });
 
         if (res && res.status === 'success') {
             alert('🎉 Xogtaada profile-ka si guul leh ayaa loo cusboonaysiiyay!');
             const userEl = document.getElementById('user-name');
             if (userEl && name) userEl.innerText = name;
+            const navNameEl = document.getElementById('nav-resident-name');
+            if (navNameEl && name) navNameEl.innerText = name;
 
             let resident = JSON.parse(localStorage.getItem('resident') || '{}');
             resident.name = name || resident.name;
             resident.phone = phone || resident.phone;
             resident.address = address || resident.address;
+            resident.subscription_plan = subscription_plan;
             localStorage.setItem('resident', JSON.stringify(resident));
             window.currentUserProfile = resident;
+            syncResidentActivePlan(resident);
             syncResidentRegisteredAddress();
         } else {
             alert(res?.message || 'Cillad ayaa dhacday.');

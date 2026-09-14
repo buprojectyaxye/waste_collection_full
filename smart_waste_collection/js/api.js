@@ -74,12 +74,22 @@ function showToast(message, type = 'success') {
     }, 3500);
 }
 
-function logout() {
-    apiCall('/auth.php?action=logout', 'POST')
+function logout(type = null) {
+    if (!type) {
+        if (window.location.pathname.includes('/admin/')) type = 'admin';
+        else if (window.location.pathname.includes('/driver/')) type = 'driver';
+        else if (window.location.pathname.includes('/resident/')) type = 'resident';
+    }
+    const endpoint = '/auth.php?action=logout' + (type ? ('&type=' + type) : '');
+    apiCall(endpoint, 'POST')
         .then(() => {
-            window.location.href = '../index.html';
+            const targetLogin = isSubfolder ? '../portal_select.html' : 'portal_select.html';
+            window.location.href = targetLogin;
         })
-        .catch(err => alert(err.message));
+        .catch(() => {
+            const targetLogin = isSubfolder ? '../portal_select.html' : 'portal_select.html';
+            window.location.href = targetLogin;
+        });
 }
 
 // Helpers for addresses that contain Google Maps links

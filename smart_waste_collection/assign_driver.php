@@ -105,7 +105,7 @@ try {
     $driverName = $driver['name'] ?? 'Driver';
     try {
         $stmtLog = $conn->prepare("INSERT INTO request_logs (request_id, action, message) VALUES (?, 'Assigned', ?)");
-        $stmtLog->execute([$request_id, "Admin assigned driver $driverName (#$driver_id)"]);
+        $stmtLog->execute([$request_id, "Assigned to driver $driverName by administrator."]);
     } catch (Exception $exLog) {}
 
     // 6. Send notification to driver

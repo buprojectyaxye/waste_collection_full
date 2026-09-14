@@ -121,6 +121,7 @@ async function showSection(sectionId) {
         }, 350);
     }
 }
+window.showSection = showSection;
 
 async function loadDriverNotifications(isManual = false) {
     try {
@@ -321,6 +322,7 @@ async function loadJobs() {
         allJobsData = res.data;
         updateStats();
         renderJobs();
+        loadHistory();
     } catch (err) {
         console.error(err);
     }
@@ -376,14 +378,28 @@ async function renderJobs() {
         let actionBtn = '';
         if (job.status === 'Pending' || job.status === 'Assigned') {
             actionBtn = `
-                <button class="btn btn-success btn-sm w-100 fw-bold shadow-sm mt-3" onclick="submitJobStatusDirect(${job.assignment_id}, ${job.request_id}, 'Accepted')">
-                    <i class="fas fa-check-circle me-1"></i> Accept Job
-                </button>
+                <div class="mt-3">
+                    <button class="btn btn-success btn-sm w-100 fw-bold shadow-sm" onclick="submitJobStatusDirect(${job.assignment_id}, ${job.request_id}, 'Accepted')">
+                        <i class="fas fa-check-circle me-1"></i> Accept Job
+                    </button>
+                </div>
             `;
         } else if (job.status === 'Accepted') {
-            actionBtn = `<button class="btn btn-warning btn-sm w-100 fw-bold shadow-sm mt-3" onclick="submitJobStatusDirect(${job.assignment_id}, ${job.request_id}, 'In Progress')"><i class="fas fa-play me-1"></i> Start Trip</button>`;
+            actionBtn = `
+                <div class="mt-3">
+                    <button class="btn btn-warning btn-sm w-100 fw-bold shadow-sm" onclick="submitJobStatusDirect(${job.assignment_id}, ${job.request_id}, 'In Progress')">
+                        <i class="fas fa-play me-1"></i> Start Trip
+                    </button>
+                </div>
+            `;
         } else if (job.status === 'In Progress') {
-            actionBtn = `<button class="btn btn-success btn-sm w-100 fw-bold shadow-sm mt-3" onclick="submitJobStatusDirect(${job.assignment_id}, ${job.request_id}, 'Completed')"><i class="fas fa-check-circle me-1"></i> Mark Picked Up</button>`;
+            actionBtn = `
+                <div class="mt-3">
+                    <button class="btn btn-success btn-sm w-100 fw-bold shadow-sm" onclick="submitJobStatusDirect(${job.assignment_id}, ${job.request_id}, 'Completed')">
+                        <i class="fas fa-check-circle me-1"></i> Mark Picked Up
+                    </button>
+                </div>
+            `;
         }
 
         container.innerHTML += `
@@ -419,6 +435,27 @@ async function renderJobs() {
         `;
     });
 }
+
+async function cancelJobByDriver(assignmentId, requestId) {
+    if (typeof Swal !== 'undefined') {
+        const result = await Swal.fire({
+            title: 'Baaji Codsiga?',
+            text: `Ma hubtaa inaad baajiso/cancel dhayso codsiga qaadista ee #${requestId}?`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc3545',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Haa, Baaji (Cancel)',
+            cancelButtonText: 'Maya'
+        });
+        if (!result.isConfirmed) return;
+    } else {
+        if (!confirm(`Ma hubtaa inaad baajiso/cancel dhayso codsiga qaadista ee #${requestId}?`)) return;
+    }
+
+    await submitJobStatusDirect(assignmentId, requestId, 'Cancelled');
+}
+window.cancelJobByDriver = cancelJobByDriver;
 
 async function submitJobStatusDirect(assignmentId, requestId, status) {
     try {
@@ -545,6 +582,15 @@ async function loadHistory(fromDate = '', toDate = '') {
         if (compEl) compEl.innerText = stats.completed_jobs !== undefined ? stats.completed_jobs : history.length;
         const todayEl = document.getElementById('hist-stat-today');
         if (todayEl) todayEl.innerText = stats.todays_jobs !== undefined ? stats.todays_jobs : 0;
+        const rateEl = document.getElementById('hist-stat-rate');
+        if (rateEl) rateEl.innerText = '$' + (stats.earning_per_pickup || '1.50');
+        const earnEl = document.getElementById('hist-stat-earnings');
+        if (earnEl) earnEl.innerText = '$' + (stats.total_earnings || '0.00');
+
+        const topEarnEl = document.getElementById('stat-driver-earnings');
+        if (topEarnEl) topEarnEl.innerText = '$' + (stats.total_earnings || '0.00');
+        const topRateBadge = document.getElementById('stat-rate-badge');
+        if (topRateBadge) topRateBadge.innerText = '$' + (stats.earning_per_pickup || '1.50') + ' / pickup';
 
         allHistoryData = history;
         currentFilteredData = [...allHistoryData];
@@ -769,24 +815,33 @@ function exportHistoryExcel() {
         return alert('Excel library is loading, please try again.');
     }
 
+    const rateValText = document.getElementById('hist-stat-rate')?.innerText || '$1.50';
+    const rateVal = parseFloat(rateValText.replace(/[^0-9.]/g, '') || 1.50);
+
     // Format data rows nicely
-    const excelData = currentFilteredData.map(job => ({
-        "Job ID": `#${job.assignment_id || job.request_id}`,
-        "Customer": job.customer_name || 'Resident',
-        "Address": job.address || 'Mogadishu',
-        "Waste Type": job.waste_type || 'Plastic',
-        "Weight (KG)": parseFloat(job.weight_kg || 25).toFixed(1),
-        "Status": job.status || 'Completed',
-        "Rating": parseFloat(job.rating || 5.0).toFixed(1),
-        "Completed At": job.completed_time ? new Date(job.completed_time).toLocaleString() : 'N/A'
-    }));
+    const excelData = currentFilteredData.map(job => {
+        const isDone = (job.status === 'Completed' || job.status === 'Done' || job.status === 'In Progress');
+        const driverEarned = isDone ? rateVal : 0;
+        return {
+            "Job ID": `#${job.assignment_id || job.request_id}`,
+            "Customer": job.customer_name || 'Resident',
+            "Address": job.address || 'Mogadishu',
+            "Waste Type": job.waste_type || 'Plastic',
+            "Weight (KG)": parseFloat(job.weight_kg || 25).toFixed(1),
+            "Status": job.status || 'Completed',
+            "Rate / Pickup ($)": rateVal.toFixed(2),
+            "Driver Earned ($)": driverEarned.toFixed(2),
+            "Rating": parseFloat(job.rating || 5.0).toFixed(1),
+            "Completed At": job.completed_time ? new Date(job.completed_time).toLocaleString() : 'N/A'
+        };
+    });
 
     // Create worksheet & workbook
     const ws = XLSX.utils.json_to_sheet(excelData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Work History");
 
-    // Auto-fit Column Widths (wch: width in characters)
+    // Auto-fit Column Widths
     ws['!cols'] = [
         { wch: 12 }, // Job ID
         { wch: 22 }, // Customer
@@ -794,8 +849,10 @@ function exportHistoryExcel() {
         { wch: 16 }, // Waste Type
         { wch: 16 }, // Weight (KG)
         { wch: 16 }, // Status
+        { wch: 18 }, // Rate / Pickup
+        { wch: 18 }, // Driver Earned
         { wch: 12 }, // Rating
-        { wch: 25 }  // Completed At (Prevents ######## error)
+        { wch: 25 }  // Completed At
     ];
 
     // Download native .xlsx file
@@ -825,7 +882,7 @@ async function exportHistoryPDF() {
     doc.setTextColor(30, 30, 30);
     doc.setFontSize(16);
     doc.setFont("helvetica", "bold");
-    doc.text("Official Driver Work History Report", 14, 26);
+    doc.text("Official Driver Work History & Earnings Report", 14, 26);
 
     const todayStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
     const profileNameInput = document.getElementById('profile-name');
@@ -838,9 +895,9 @@ async function exportHistoryPDF() {
 
     // Summary Box
     const completed = document.getElementById('hist-stat-completed')?.innerText || '0';
-    const today = document.getElementById('hist-stat-today')?.innerText || '0';
+    const rateText = document.getElementById('hist-stat-rate')?.innerText || '$1.50';
     const earnings = document.getElementById('hist-stat-earnings')?.innerText || '$0.00';
-    const waste = document.getElementById('hist-stat-waste')?.innerText || '0 KG';
+    const rateVal = parseFloat(rateText.replace(/[^0-9.]/g, '') || 1.50);
 
     doc.setDrawColor(220, 220, 220);
     doc.setFillColor(245, 248, 245);
@@ -849,25 +906,28 @@ async function exportHistoryPDF() {
     doc.setFontSize(9);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(27, 94, 32);
-    doc.text(`Completed Jobs: ${completed}`, 20, 48);
-    doc.text(`Today's Jobs: ${today}`, 68, 48);
-    doc.text(`Total Waste: ${waste}`, 112, 48);
-    doc.text(`Total Earnings: ${earnings}`, 158, 48);
+    doc.text(`Completed Pickups: ${completed}`, 18, 48);
+    doc.text(`Rate / Pickup: ${rateText}`, 74, 48);
+    doc.text(`Total Accrued Earnings: ${earnings}`, 130, 48);
 
     // Table Data
-    const tableBody = currentFilteredData.map(job => [
-        `#${job.assignment_id || job.request_id}`,
-        job.customer_name || 'Resident',
-        job.address || 'Mogadishu',
-        job.waste_type || 'Plastic',
-        `${parseFloat(job.weight_kg || 25).toFixed(1)} KG`,
-        job.status || 'Completed',
-        `⭐ ${parseFloat(job.rating || 5.0).toFixed(1)}`
-    ]);
+    const tableBody = currentFilteredData.map(job => {
+        const isDone = (job.status === 'Completed' || job.status === 'Done' || job.status === 'In Progress');
+        const driverEarned = isDone ? rateVal : 0;
+        return [
+            `#${job.assignment_id || job.request_id}`,
+            job.customer_name || 'Resident',
+            job.address || 'Mogadishu',
+            job.waste_type || 'Plastic',
+            job.status || 'Completed',
+            `$${driverEarned.toFixed(2)}`,
+            `⭐ ${parseFloat(job.rating || 5.0).toFixed(1)}`
+        ];
+    });
 
     doc.autoTable({
         startY: 59,
-        head: [['JOB ID', 'CUSTOMER', 'ADDRESS', 'WASTE TYPE', 'WEIGHT', 'STATUS', 'RATING']],
+        head: [['JOB ID', 'CUSTOMER', 'ADDRESS', 'WASTE TYPE', 'STATUS', 'EARNED ($)', 'RATING']],
         body: tableBody,
         theme: 'grid',
         headStyles: {
@@ -920,6 +980,7 @@ async function loadSettings() {
             if (document.getElementById('profile-name')) document.getElementById('profile-name').value = profile.name || '';
             if (document.getElementById('profile-phone')) document.getElementById('profile-phone').value = profile.phone || '';
             if (document.getElementById('profile-vehicle-plate')) document.getElementById('profile-vehicle-plate').value = profile.vehicle_plate || '';
+            if (document.getElementById('profile-earning-rate')) document.getElementById('profile-earning-rate').value = '$' + parseFloat(profile.earning_per_pickup || 1.50).toFixed(2) + ' / pickup';
             
             // Sync Driver Header Profile Pill
             const headerName = document.getElementById('driverHeaderName');

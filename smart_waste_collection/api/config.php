@@ -28,8 +28,18 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
     exit();
 }
 
+// Configure long-lived 30-day persistent session parameters (2,592,000 seconds)
+ini_set('session.gc_maxlifetime', 2592000);
+ini_set('session.cookie_lifetime', 2592000);
+
 // Start session for authentication state if not active
 if (session_status() === PHP_SESSION_NONE) {
+    session_set_cookie_params([
+        'lifetime' => 2592000,
+        'path' => '/',
+        'httponly' => true,
+        'samesite' => 'Lax'
+    ]);
     session_start();
 }
 
@@ -221,6 +231,9 @@ try {
     try {
         $conn->exec("ALTER TABLE drivers ADD COLUMN emergency_contact VARCHAR(50) DEFAULT NULL AFTER license_number");
     } catch (Exception $e) {}
+    try {
+        $conn->exec("ALTER TABLE drivers ADD COLUMN earning_per_pickup DECIMAL(5,2) DEFAULT 1.50 AFTER emergency_contact");
+    } catch (Exception $e) {}
 
     try {
         $conn->exec("ALTER TABLE waste_requests ADD COLUMN paid_amount DECIMAL(10,2) DEFAULT 5.00 AFTER payment_status");
@@ -315,7 +328,68 @@ function sendResponse($status, $message, $data = null, $statusCode = 200) {
     exit();
 }
 
-// Helper to check if logged in with role-keyed session isolation & auto-healing recovery
+// Helper to seamlessly restore session from persistent 30-day role-specific auth token cookie
+function restoreSessionFromCookie($role = null) {
+    global $conn;
+    $cookieNames = [];
+    if ($role) {
+        $cookieNames[] = 'swcms_token_' . $role;
+    } else {
+        $cookieNames = ['swcms_token_admin', 'swcms_token_driver', 'swcms_token_resident'];
+    }
+
+    foreach ($cookieNames as $cName) {
+        if (!empty($_COOKIE[$cName])) {
+            $decoded = base64_decode($_COOKIE[$cName]);
+            $parts = explode(':', $decoded);
+            if (count($parts) === 3) {
+                list($type, $userId, $tokenHash) = $parts;
+                if ($role && $type !== $role) continue;
+                
+                $table = 'residents';
+                $idField = 'resident_id';
+                if ($type === 'driver') {
+                    $table = 'drivers';
+                    $idField = 'driver_id';
+                } elseif ($type === 'admin') {
+                    $table = 'admins';
+                    $idField = 'admin_id';
+                }
+
+                try {
+                    $stmt = $conn->prepare("SELECT * FROM $table WHERE $idField = ?");
+                    $stmt->execute([$userId]);
+                    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                    if ($user) {
+                        $secretKey = "SWCMS_SECRET_KEY_2026";
+                        $expectedHash = hash_hmac('sha256', "$type:$userId:" . $user['password'], $secretKey);
+                        if (hash_equals($expectedHash, $tokenHash)) {
+                            if ($type === 'driver' && ($user['approval_status'] ?? 'Approved') !== 'Approved') {
+                                continue;
+                            }
+                            $_SESSION['user_id'] = $user[$idField];
+                            $_SESSION['user_type'] = $type;
+                            $_SESSION['name'] = $user['name'];
+                            $_SESSION['email'] = $user['email'] ?? $user['name'];
+                            if (!isset($_SESSION['sessions'])) $_SESSION['sessions'] = [];
+                            $_SESSION['sessions'][$type] = [
+                                'user_id' => $user[$idField],
+                                'type' => $type,
+                                'name' => $user['name'],
+                                'email' => $user['email'] ?? $user['name']
+                            ];
+                            return true;
+                        }
+                    }
+                } catch (Exception $exCookie) {}
+            }
+        }
+    }
+    return false;
+}
+
+// Helper to check if logged in with role-keyed session isolation & persistent cookie restoration
 function requireAuth($role = null) {
     if ($role && isset($_SESSION['sessions'][$role])) {
         // Activate role-specific session for this API request
@@ -341,34 +415,9 @@ function requireAuth($role = null) {
         }
     }
 
-    // Auto-heal active session if requested for any role
-    if ($role) {
-        global $conn;
-        try {
-            if ($role === 'admin') {
-                $stmt = $conn->query("SELECT admin_id as id, name, email FROM admins ORDER BY admin_id ASC LIMIT 1");
-            } elseif ($role === 'resident') {
-                $stmt = $conn->query("SELECT resident_id as id, name, email FROM residents ORDER BY resident_id ASC LIMIT 1");
-            } elseif ($role === 'driver') {
-                $stmt = $conn->query("SELECT driver_id as id, name, email FROM drivers WHERE approval_status = 'Approved' ORDER BY driver_id ASC LIMIT 1");
-            }
-            if (isset($stmt)) {
-                $user = $stmt->fetch();
-                if ($user) {
-                    $_SESSION['user_id'] = $user['id'];
-                    $_SESSION['user_type'] = $role;
-                    $_SESSION['name'] = $user['name'];
-                    $_SESSION['email'] = $user['email'] ?? $user['name'];
-                    $_SESSION['sessions'][$role] = [
-                        'user_id' => $user['id'],
-                        'type' => $role,
-                        'name' => $user['name'],
-                        'email' => $user['email'] ?? $user['name']
-                    ];
-                    return;
-                }
-            }
-        } catch (Exception $e) {}
+    // Attempt transparent session recovery from 30-day persistent auth cookie
+    if (restoreSessionFromCookie($role)) {
+        return;
     }
 
     sendResponse('error', 'Unauthorized. Please log in.', null, 401);
